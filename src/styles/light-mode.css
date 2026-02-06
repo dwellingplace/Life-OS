@@ -1,0 +1,169 @@
+/*
+ * Light Mode Overrides
+ *
+ * Provides light theme variants for all design tokens.
+ * Activated via data-theme="light" on <html>, or automatically
+ * via prefers-color-scheme when no explicit theme is set.
+ *
+ * Dark mode tokens (the defaults) are defined in the main CSS.
+ * This file only overrides color-related custom properties --
+ * spacing, sizing, and typography tokens remain unchanged.
+ */
+
+[data-theme='light'] {
+  /* ===== Surface colors ===== */
+  --surface-base: #f8f9fa;
+  --surface-raised: #ffffff;
+  --surface-overlay: #f0f1f3;
+  --surface-sunken: #e9ecef;
+  --surface-inset: #dee2e6;
+
+  /* ===== Text colors ===== */
+  --text-primary: #1a1d21;
+  --text-secondary: #495057;
+  --text-tertiary: #868e96;
+  --text-quaternary: #adb5bd;
+  --text-inverse: #f8f9fa;
+  --text-on-accent: #ffffff;
+
+  /* ===== Glass / frosted-panel effects ===== */
+  --glass-bg-primary: rgba(255, 255, 255, 0.72);
+  --glass-bg-secondary: rgba(255, 255, 255, 0.55);
+  --glass-bg-modal: rgba(248, 249, 250, 0.88);
+  --glass-blur: 12px;
+  --glass-border: rgba(0, 0, 0, 0.08);
+  --glass-border-strong: rgba(0, 0, 0, 0.14);
+
+  /* ===== Accent (teal/cyan -- adjusted for light backgrounds) ===== */
+  --accent: #0d9488;
+  --accent-hover: #0f766e;
+  --accent-subtle: rgba(13, 148, 136, 0.12);
+  --accent-muted: rgba(13, 148, 136, 0.06);
+
+  /* ===== Status colors ===== */
+  --status-success: #16a34a;
+  --status-success-subtle: rgba(22, 163, 74, 0.10);
+  --status-warning: #ca8a04;
+  --status-warning-subtle: rgba(202, 138, 4, 0.10);
+  --status-error: #dc2626;
+  --status-error-subtle: rgba(220, 38, 38, 0.10);
+  --status-info: #2563eb;
+  --status-info-subtle: rgba(37, 99, 235, 0.10);
+
+  /* ===== Borders & dividers ===== */
+  --border-default: rgba(0, 0, 0, 0.10);
+  --border-subtle: rgba(0, 0, 0, 0.06);
+  --border-strong: rgba(0, 0, 0, 0.18);
+  --divider: rgba(0, 0, 0, 0.08);
+
+  /* ===== Shadows (softer on light) ===== */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.10);
+  --shadow-xl: 0 8px 32px rgba(0, 0, 0, 0.12);
+
+  /* ===== Backdrop / scrim ===== */
+  --backdrop: rgba(0, 0, 0, 0.25);
+
+  /* ===== Focus ring ===== */
+  --focus-ring: rgba(13, 148, 136, 0.40);
+
+  /* ===== Scrollbar ===== */
+  --scrollbar-track: transparent;
+  --scrollbar-thumb: rgba(0, 0, 0, 0.15);
+  --scrollbar-thumb-hover: rgba(0, 0, 0, 0.25);
+
+  /* ===== Input fields ===== */
+  --input-bg: #ffffff;
+  --input-border: rgba(0, 0, 0, 0.12);
+  --input-border-focus: var(--accent);
+  --input-placeholder: #adb5bd;
+
+  /* ===== Skeleton / loading states ===== */
+  --skeleton-base: #e9ecef;
+  --skeleton-shimmer: #f8f9fa;
+
+  /* ===== Tag / chip / badge backgrounds ===== */
+  --tag-bg: rgba(0, 0, 0, 0.06);
+  --tag-bg-hover: rgba(0, 0, 0, 0.10);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) {
+    /* ===== Surface colors ===== */
+    --surface-base: #f8f9fa;
+    --surface-raised: #ffffff;
+    --surface-overlay: #f0f1f3;
+    --surface-sunken: #e9ecef;
+    --surface-inset: #dee2e6;
+
+    /* ===== Text colors ===== */
+    --text-primary: #1a1d21;
+    --text-secondary: #495057;
+    --text-tertiary: #868e96;
+    --text-quaternary: #adb5bd;
+    --text-inverse: #f8f9fa;
+    --text-on-accent: #ffffff;
+
+    /* ===== Glass / frosted-panel effects ===== */
+    --glass-bg-primary: rgba(255, 255, 255, 0.72);
+    --glass-bg-secondary: rgba(255, 255, 255, 0.55);
+    --glass-bg-modal: rgba(248, 249, 250, 0.88);
+    --glass-blur: 12px;
+    --glass-border: rgba(0, 0, 0, 0.08);
+    --glass-border-strong: rgba(0, 0, 0, 0.14);
+
+    /* ===== Accent (teal/cyan -- adjusted for light backgrounds) ===== */
+    --accent: #0d9488;
+    --accent-hover: #0f766e;
+    --accent-subtle: rgba(13, 148, 136, 0.12);
+    --accent-muted: rgba(13, 148, 136, 0.06);
+
+    /* ===== Status colors ===== */
+    --status-success: #16a34a;
+    --status-success-subtle: rgba(22, 163, 74, 0.10);
+    --status-warning: #ca8a04;
+    --status-warning-subtle: rgba(202, 138, 4, 0.10);
+    --status-error: #dc2626;
+    --status-error-subtle: rgba(220, 38, 38, 0.10);
+    --status-info: #2563eb;
+    --status-info-subtle: rgba(37, 99, 235, 0.10);
+
+    /* ===== Borders & dividers ===== */
+    --border-default: rgba(0, 0, 0, 0.10);
+    --border-subtle: rgba(0, 0, 0, 0.06);
+    --border-strong: rgba(0, 0, 0, 0.18);
+    --divider: rgba(0, 0, 0, 0.08);
+
+    /* ===== Shadows (softer on light) ===== */
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.08);
+    --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.10);
+    --shadow-xl: 0 8px 32px rgba(0, 0, 0, 0.12);
+
+    /* ===== Backdrop / scrim ===== */
+    --backdrop: rgba(0, 0, 0, 0.25);
+
+    /* ===== Focus ring ===== */
+    --focus-ring: rgba(13, 148, 136, 0.40);
+
+    /* ===== Scrollbar ===== */
+    --scrollbar-track: transparent;
+    --scrollbar-thumb: rgba(0, 0, 0, 0.15);
+    --scrollbar-thumb-hover: rgba(0, 0, 0, 0.25);
+
+    /* ===== Input fields ===== */
+    --input-bg: #ffffff;
+    --input-border: rgba(0, 0, 0, 0.12);
+    --input-border-focus: var(--accent);
+    --input-placeholder: #adb5bd;
+
+    /* ===== Skeleton / loading states ===== */
+    --skeleton-base: #e9ecef;
+    --skeleton-shimmer: #f8f9fa;
+
+    /* ===== Tag / chip / badge backgrounds ===== */
+    --tag-bg: rgba(0, 0, 0, 0.06);
+    --tag-bg-hover: rgba(0, 0, 0, 0.10);
+  }
+}
