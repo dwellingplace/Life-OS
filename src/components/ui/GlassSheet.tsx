@@ -7,6 +7,7 @@ import React, {
   type ReactNode,
   type CSSProperties,
 } from 'react';
+import { createPortal } from 'react-dom';
 
 export interface GlassSheetProps {
   isOpen: boolean;
@@ -72,6 +73,9 @@ export function GlassSheet({
 
   if (!isOpen) return null;
 
+  // Portal target — only available on client
+  const portalTarget = typeof document !== 'undefined' ? document.body : null;
+
   const backdropStyle: CSSProperties = {
     position: 'fixed',
     inset: 0,
@@ -97,7 +101,7 @@ export function GlassSheet({
     border: '1px solid var(--glass-border)',
     borderBottom: 'none',
     boxShadow: 'var(--glass-inner-glow), 0 -8px 40px rgba(0, 0, 0, 0.3)',
-    paddingBottom: 'calc(var(--space-6) + var(--safe-area-bottom))',
+    paddingBottom: 'calc(var(--space-6) + var(--safe-area-bottom) + 48px)',
     overflowY: 'auto',
     WebkitOverflowScrolling: 'touch',
     outline: 'none',
@@ -126,7 +130,7 @@ export function GlassSheet({
     padding: '0 var(--space-5)',
   };
 
-  return (
+  const sheet = (
     <>
       <style>{`
         @keyframes glassSheetBackdropIn {
@@ -177,6 +181,10 @@ export function GlassSheet({
       </div>
     </>
   );
+
+  // Render via portal to escape parent stacking contexts (e.g. overflow:hidden
+  // on AppShell content wrapper) so the sheet always appears above the TabBar.
+  return portalTarget ? createPortal(sheet, portalTarget) : sheet;
 }
 
 export default GlassSheet;

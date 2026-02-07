@@ -3,6 +3,7 @@
 import React, {
   useState,
   useCallback,
+  useEffect,
   useMemo,
   useRef,
   type CSSProperties,
@@ -364,6 +365,25 @@ export default function JournalScreen({ onSearchPress }: JournalScreenProps) {
   })
   const [expandedArchiveIds, setExpandedArchiveIds] = useState<Set<string>>(new Set())
 
+  // ── Local buffer for section text (prevents debounce + live-query feedback loop) ──
+  const [localSections, setLocalSections] = useState<Record<string, string>>({})
+  const lastSectionEditRef = useRef<Record<string, number>>({})
+
+  // Sync DB values → local buffer, but skip sections the user typed in recently
+  useEffect(() => {
+    const sections = journal.entry?.sections
+    if (!sections) return
+    setLocalSections((prev) => {
+      const next = { ...prev }
+      for (const key of Object.keys(sections)) {
+        if (Date.now() - (lastSectionEditRef.current[key] ?? 0) > 1000) {
+          next[key] = (sections as Record<string, string>)[key] ?? ''
+        }
+      }
+      return next
+    })
+  }, [journal.entry?.sections])
+
   // Live query for past journal entries (all entries except today's)
   const pastEntries = useLiveQuery(
     () =>
@@ -407,6 +427,8 @@ export default function JournalScreen({ onSearchPress }: JournalScreenProps) {
 
   const handleSectionChange = useCallback(
     (sectionKey: SectionKey) => (value: string) => {
+      lastSectionEditRef.current[sectionKey] = Date.now()
+      setLocalSections((prev) => ({ ...prev, [sectionKey]: value }))
       journal.updateSection(sectionKey, value)
     },
     [journal.updateSection]
@@ -460,9 +482,9 @@ export default function JournalScreen({ onSearchPress }: JournalScreenProps) {
 
   const getSectionText = useCallback(
     (sectionKey: SectionKey): string => {
-      return journal.entry?.sections?.[sectionKey] ?? ''
+      return localSections[sectionKey] ?? journal.entry?.sections?.[sectionKey] ?? ''
     },
-    [journal.entry]
+    [localSections, journal.entry]
   )
 
   // ── Loading state ──

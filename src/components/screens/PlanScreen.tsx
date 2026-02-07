@@ -1125,6 +1125,35 @@ function TemplateDetailSheet({
     setEditingItemValue('')
   }, [editingItemField, editingItemValue, items])
 
+  // ── Add / Remove item handlers ──
+
+  const handleAddItem = useCallback(async () => {
+    const now = new Date().toISOString()
+    const maxSort = items.length > 0 ? Math.max(...items.map(i => i.sortOrder)) : -1
+    // Inherit itemType and config shape from the last item, or use sensible defaults
+    const lastItem = items.length > 0 ? items[items.length - 1] : null
+    const defaultConfig = lastItem
+      ? { ...lastItem.config }
+      : { sets: 3, reps: 10 }
+
+    await db.templateItems.add({
+      id: crypto.randomUUID(),
+      templateId: template.id,
+      label: 'New Exercise',
+      itemType: lastItem?.itemType ?? 'exercise',
+      config: defaultConfig,
+      sortOrder: maxSort + 1,
+      isOptional: false,
+      createdAt: now,
+      updatedAt: now,
+    })
+  }, [items, template.id])
+
+  const handleDeleteItem = useCallback(async (itemId: string) => {
+    const now = new Date().toISOString()
+    await db.templateItems.update(itemId, { deletedAt: now })
+  }, [])
+
   // ── Save as New Template handler ──
 
   const handleSaveAsNewTemplate = useCallback(async () => {
@@ -1519,6 +1548,31 @@ function TemplateDetailSheet({
                           optional
                         </span>
                       )}
+
+                      {/* Delete item button */}
+                      {!isEditingThisLabel && (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteItem(item.id)}
+                          aria-label={`Remove ${item.label}`}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            width: '24px',
+                            height: '24px',
+                            borderRadius: 'var(--radius-sm)',
+                            background: 'none',
+                            border: 'none',
+                            color: 'var(--text-tertiary)',
+                            cursor: 'pointer',
+                            flexShrink: 0,
+                            padding: 0,
+                          }}
+                        >
+                          <XIcon size={14} />
+                        </button>
+                      )}
                     </div>
 
                     {/* Row 2: numeric config fields (sets / reps / weight) — shown if any exist */}
@@ -1574,6 +1628,32 @@ function TemplateDetailSheet({
               })}
             </div>
           )}
+
+          {/* Add Item button */}
+          <button
+            type="button"
+            onClick={handleAddItem}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 'var(--space-2)',
+              width: '100%',
+              marginTop: 'var(--space-2)',
+              padding: 'var(--space-2) var(--space-3)',
+              minHeight: 'var(--tap-min)',
+              background: 'var(--glass-bg-primary)',
+              border: '1px dashed var(--glass-border)',
+              borderRadius: 'var(--radius-md)',
+              color: 'var(--text-secondary)',
+              fontSize: 'var(--text-sm)',
+              fontFamily: 'var(--font-sans)',
+              cursor: 'pointer',
+            }}
+          >
+            <PlusIcon size={14} />
+            Add Item
+          </button>
         </section>
 
         {/* Schedule Editor */}

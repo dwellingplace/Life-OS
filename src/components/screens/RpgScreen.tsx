@@ -115,5 +115,5 @@ const contentStyle: CSSProperties = {
   flex: 1,
   overflow: 'auto',
   padding: 'var(--space-4)',
-  paddingBottom: 'calc(var(--space-4) + 80px)',
+  paddingBottom: 'calc(var(--tabbar-height) + var(--space-8))',
 }
