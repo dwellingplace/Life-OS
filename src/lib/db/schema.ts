@@ -25,6 +25,20 @@ export type TemplateType =
 export type RepeatType = 'daily' | 'specific-days' | 'weekly' | 'biweekly' | 'monthly' | 'custom'
 export type SyncStatus = 'pending' | 'in-flight' | 'synced' | 'failed'
 
+// ── RPG Enums ──
+
+export type StatAbbr = 'STR' | 'END' | 'DIS' | 'WIS' | 'CHA' | 'FOC' | 'CRA' | 'STW' | 'FAI'
+export type QuestType = 'daily' | 'weekly'
+export type QuestStatus = 'active' | 'completed' | 'expired'
+export type QuestlineStatus = 'active' | 'completed' | 'abandoned'
+export type EncounterStatus = 'pending' | 'active' | 'victory' | 'defeat' | 'expired'
+export type EncounterDifficulty = 'easy' | 'medium' | 'hard' | 'boss'
+export type BattleAction = 'attack' | 'defend' | 'skill' | 'truth'
+export type LootType = 'xp_orb' | 'gear' | 'title' | 'quest_token' | 'essence_fragment'
+export type TruthTheme = 'strength' | 'wisdom' | 'faith' | 'discipline' | 'courage' | 'peace'
+export type CosmeticType = 'gear' | 'title' | 'aura' | 'badge'
+export type SkillTreeId = 'warrior' | 'sage' | 'leader' | 'tuner' | 'steward'
+
 // ── Core Entities ──
 
 export interface Template {
@@ -346,6 +360,198 @@ export interface AppSettings {
   updatedAt: string
 }
 
+// ── RPG Entities ──
+
+export interface RpgCharacter {
+  id: string // always 'current'
+  userId: string
+  level: number
+  totalXp: number
+  prestigeCount: number
+  prestigeXpBonus: number
+  title: string
+  gear: string[]
+  auraColor: string
+  equippedTruths: string[]
+  createdAt: string
+  updatedAt: string
+  clientEventId: string
+}
+
+export interface RpgStatLevel {
+  id: string // `${userId}_${stat}`
+  userId: string
+  stat: StatAbbr
+  level: number
+  currentXp: number
+  totalXp: number
+  updatedAt: string
+  clientEventId: string
+}
+
+export interface RpgXpEvent {
+  id: string
+  userId: string
+  clientEventId: string
+  sourceModule: string
+  sourceAction: string
+  sourceItemId: string
+  primaryStat: StatAbbr
+  primaryXp: number
+  secondaryStat?: StatAbbr
+  secondaryXp?: number
+  bonusXp?: number
+  bonusSource?: string
+  timestamp: string
+  syncedAt?: string
+}
+
+export interface RpgPerkUnlock {
+  id: string // `${userId}_${treeId}_${perkNumber}`
+  userId: string
+  treeId: SkillTreeId
+  perkNumber: number
+  unlockedAt: string
+  clientEventId: string
+}
+
+export interface RpgPerkPoints {
+  id: string // `${userId}_perkpoints`
+  userId: string
+  available: number
+  totalEarned: number
+  updatedAt: string
+  clientEventId: string
+}
+
+export interface RpgQuest {
+  id: string
+  userId: string
+  type: QuestType
+  name: string
+  description: string
+  targetModule: string
+  targetAction: string
+  targetCount: number
+  currentCount: number
+  xpReward: Record<string, number>
+  status: QuestStatus
+  createdAt: string
+  completedAt?: string
+  expiresAt: string
+  clientEventId: string
+}
+
+export interface RpgQuestline {
+  id: string
+  userId: string
+  templateId: string
+  name: string
+  currentStep: number
+  totalSteps: number
+  status: QuestlineStatus
+  stepDeadline: string
+  rewards: { title?: string; gear?: string; perkPoints: number }
+  startedAt: string
+  completedAt?: string
+  clientEventId: string
+}
+
+export interface RpgEncounter {
+  id: string
+  userId: string
+  enemyId: string
+  enemyName: string
+  difficulty: EncounterDifficulty
+  enemyHp: number
+  enemyMaxHp: number
+  enemyPower: number
+  enemyDefense: number
+  enemyPattern: string[]
+  enemyPatternIndex: number
+  playerHp: number
+  playerMaxHp: number
+  playerEnergy: number
+  playerMaxEnergy: number
+  status: EncounterStatus
+  turnsElapsed: number
+  loot: RpgLootDrop[]
+  spawnedBy: string
+  createdAt: string
+  expiresAt: string
+  completedAt?: string
+  clientEventId: string
+}
+
+export interface RpgLootDrop {
+  type: LootType
+  itemId: string
+  amount?: number
+  stat?: StatAbbr
+}
+
+export interface RpgBattleTurn {
+  id: string
+  encounterId: string
+  turnNumber: number
+  playerAction: BattleAction
+  playerSkillUsed?: string
+  playerDamageDealt: number
+  enemyAction: string
+  enemyDamageDealt: number
+  playerHpAfter: number
+  enemyHpAfter: number
+  playerEnergyAfter: number
+  isCrit: boolean
+  timestamp: string
+}
+
+export interface RpgTruth {
+  id: string
+  userId: string
+  text: string
+  sourceEntryId: string
+  theme: TruthTheme
+  battleEffect: string
+  battlePower: number
+  isEquipped: boolean
+  collectedAt: string
+  clientEventId: string
+}
+
+export interface RpgAchievement {
+  id: string
+  userId: string
+  name: string
+  description: string
+  icon: string
+  unlockedAt: string
+  clientEventId: string
+}
+
+export interface RpgCosmeticItem {
+  id: string
+  userId: string
+  type: CosmeticType
+  itemId: string
+  name: string
+  description: string
+  effect?: string
+  isEquipped: boolean
+  acquiredAt: string
+  clientEventId: string
+}
+
+export interface RpgLogEntry {
+  id: string
+  userId: string
+  type: 'level_up' | 'stat_up' | 'quest_complete' | 'battle' | 'achievement' | 'loot' | 'perk'
+  title: string
+  description: string
+  data: Record<string, unknown>
+  timestamp: string
+}
+
 // ── Database Class ──
 
 export class LifeOSDatabase extends Dexie {
@@ -372,6 +578,21 @@ export class LifeOSDatabase extends Dexie {
   taggables!: EntityTable<Taggable, 'id'>
   syncOutbox!: EntityTable<SyncOutbox, 'id'>
   appSettings!: EntityTable<AppSettings, 'id'>
+
+  // RPG tables
+  rpgCharacters!: EntityTable<RpgCharacter, 'id'>
+  rpgStatLevels!: EntityTable<RpgStatLevel, 'id'>
+  rpgXpEvents!: EntityTable<RpgXpEvent, 'id'>
+  rpgPerkUnlocks!: EntityTable<RpgPerkUnlock, 'id'>
+  rpgPerkPoints!: EntityTable<RpgPerkPoints, 'id'>
+  rpgQuests!: EntityTable<RpgQuest, 'id'>
+  rpgQuestlines!: EntityTable<RpgQuestline, 'id'>
+  rpgEncounters!: EntityTable<RpgEncounter, 'id'>
+  rpgBattleTurns!: EntityTable<RpgBattleTurn, 'id'>
+  rpgTruths!: EntityTable<RpgTruth, 'id'>
+  rpgAchievements!: EntityTable<RpgAchievement, 'id'>
+  rpgCosmeticItems!: EntityTable<RpgCosmeticItem, 'id'>
+  rpgLogEntries!: EntityTable<RpgLogEntry, 'id'>
 
   constructor() {
     super('LifeOS')
@@ -400,6 +621,22 @@ export class LifeOSDatabase extends Dexie {
       taggables: 'id, tagId, taggableType, taggableId',
       syncOutbox: 'id, clientEventId, status, entityType',
       appSettings: 'id',
+    })
+
+    this.version(2).stores({
+      rpgCharacters: 'id, userId',
+      rpgStatLevels: 'id, userId, stat',
+      rpgXpEvents: 'id, userId, clientEventId, sourceModule, timestamp',
+      rpgPerkUnlocks: 'id, userId, treeId',
+      rpgPerkPoints: 'id, userId',
+      rpgQuests: 'id, userId, type, status, expiresAt',
+      rpgQuestlines: 'id, userId, templateId, status',
+      rpgEncounters: 'id, userId, status, expiresAt',
+      rpgBattleTurns: 'id, encounterId, turnNumber',
+      rpgTruths: 'id, userId, isEquipped',
+      rpgAchievements: 'id, userId',
+      rpgCosmeticItems: 'id, userId, type, isEquipped',
+      rpgLogEntries: 'id, userId, type, timestamp',
     })
   }
 }

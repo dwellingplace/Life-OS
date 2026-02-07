@@ -6,6 +6,7 @@ import type {
   WeeklyFocus,
 } from '@/lib/db/schema'
 import { v4 as uuid } from 'uuid'
+import { onLeadershipComplete, onFinanceCheckIn } from '@/lib/rpg/xpIntegration'
 
 // ── Helpers ──
 
@@ -44,6 +45,9 @@ export async function markCharismaGotIt(
     completedAt: timestamp,
     updatedAt: timestamp,
   })
+
+  // RPG: Grant XP for charisma/leadership completion
+  onLeadershipComplete(instanceId).catch(() => {})
 }
 
 /**
@@ -170,6 +174,10 @@ export async function saveFinanceEntry(
   }
 
   await db.financeEntries.add(entry)
+
+  // RPG: Grant XP for finance check-in
+  onFinanceCheckIn(entry.id).catch(() => {})
+
   return entry
 }
 

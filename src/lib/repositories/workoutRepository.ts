@@ -6,6 +6,7 @@ import type {
   ExerciseHistory,
 } from '@/lib/db/schema'
 import { v4 as uuid } from 'uuid'
+import { onWorkoutComplete } from '@/lib/rpg/xpIntegration'
 
 // ── Types ──
 
@@ -398,6 +399,13 @@ export async function completeWorkout(instanceId: string): Promise<void> {
       updatedAt: timestamp,
     })
   }
+
+  // RPG: Grant XP for workout completion
+  const totalCompletedSets = entries.reduce((sum, entry) => {
+    const sets = parseSetsFromEntry(entry)
+    return sum + sets.filter((s) => s.completed).length
+  }, 0)
+  onWorkoutComplete(instanceId, totalCompletedSets, false).catch(() => {})
 }
 
 // ── 8. prefillFromLastTime ──

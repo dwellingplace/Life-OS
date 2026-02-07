@@ -7,6 +7,7 @@ import TasksScreen from '@/components/screens/TasksScreen'
 import JournalScreen from '@/components/screens/JournalScreen'
 import PlanScreen from '@/components/screens/PlanScreen'
 import ProgressScreen from '@/components/screens/ProgressScreen'
+import RpgScreen from '@/components/screens/RpgScreen'
 import OnboardingScreen from '@/components/screens/OnboardingScreen'
 import { isOnboardingComplete } from '@/lib/onboarding/presets'
 import type { TabId } from '@/types'
@@ -41,6 +42,8 @@ export default function HomePage() {
             return <PlanScreen onSearchPress={onSearchPress} />
           case 'progress':
             return <ProgressScreen onSearchPress={onSearchPress} />
+          case 'rpg':
+            return <RpgScreen onSearchPress={onSearchPress} />
           default:
             return null
         }

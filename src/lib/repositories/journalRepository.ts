@@ -1,6 +1,7 @@
 import { db } from '@/lib/db'
 import type { JournalEntry, Attachment, OcrText, ReminderItem, TimeBlock } from '@/lib/db/schema'
 import { v4 as uuid } from 'uuid'
+import { onJournalSave, onPrayerComplete } from '@/lib/rpg/xpIntegration'
 
 // ── Helpers ──
 
@@ -91,6 +92,16 @@ export async function updateJournalSection(
     fullText: buildFullText(updatedSections),
     updatedAt: now(),
   })
+
+  // RPG: Grant XP for journal/prayer
+  const fullText = buildFullText(updatedSections)
+  const wordCount = fullText.split(/\s+/).filter(Boolean).length
+  if (section === 'prayer' && text.trim().length > 0) {
+    onPrayerComplete(entryId).catch(() => {})
+  }
+  if (wordCount > 10) {
+    onJournalSave(entryId, wordCount).catch(() => {})
+  }
 }
 
 /**

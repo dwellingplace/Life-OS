@@ -7,6 +7,7 @@ import {
   CheckSquareIcon,
   BookIcon,
   BarChartIcon,
+  SwordIcon,
 } from '@/components/ui/Icons'
 import type { TabId } from '@/types'
 
@@ -20,7 +21,7 @@ const tabs: { id: TabId; label: string; Icon: React.ComponentType<{ size?: numbe
   { id: 'plan', label: 'Plan', Icon: LayersIcon },
   { id: 'tasks', label: 'Tasks', Icon: CheckSquareIcon },
   { id: 'journal', label: 'Journal', Icon: BookIcon },
-  { id: 'progress', label: 'Progress', Icon: BarChartIcon },
+  { id: 'rpg', label: 'Quest', Icon: SwordIcon },
 ]
 
 export default function TabBar({ activeTab, onTabChange }: TabBarProps) {

@@ -1,6 +1,7 @@
 import { db } from '@/lib/db'
 import type { Task, Priority } from '@/lib/db/schema'
 import { v4 as uuid } from 'uuid'
+import { onTaskComplete, onAllTop3Complete } from '@/lib/rpg/xpIntegration'
 
 // ── Types ──
 
@@ -231,11 +232,28 @@ export async function getTop3Tasks(dateStr: string): Promise<Task[]> {
 /** Mark a task as completed. */
 export async function completeTask(id: string): Promise<void> {
   const timestamp = now()
+  const task = await db.tasks.get(id)
   await db.tasks.update(id, {
     status: 'completed',
     completedAt: timestamp,
     updatedAt: timestamp,
   })
+
+  // RPG: Grant XP
+  if (task) {
+    onTaskComplete(id, task.isTop3, task.priority === 'p1').catch(() => {})
+
+    // Check if all Top 3 are now complete
+    if (task.isTop3 && task.top3Date) {
+      const top3 = await db.tasks
+        .filter((t) => t.isTop3 && t.top3Date === task.top3Date && !t.deletedAt)
+        .toArray()
+      const allDone = top3.every((t) => t.status === 'completed' || t.id === id)
+      if (allDone && top3.length >= 3) {
+        onAllTop3Complete(task.top3Date).catch(() => {})
+      }
+    }
+  }
 }
 
 /** Mark a completed task as active again. */

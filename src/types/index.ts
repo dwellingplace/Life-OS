@@ -226,7 +226,7 @@ export interface MobilityItem {
 }
 
 // ── Tab Type ──
-export type TabId = 'today' | 'plan' | 'tasks' | 'journal' | 'progress'
+export type TabId = 'today' | 'plan' | 'tasks' | 'journal' | 'progress' | 'rpg'
 
 export interface TabConfig {
   id: TabId

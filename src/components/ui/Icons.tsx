@@ -204,3 +204,12 @@ export const WifiOffIcon = makeIcon('WifiOffIcon', () => (
     <line x1="12" y1="20" x2="12.01" y2="20" />
   </>
 ))
+
+export const SwordIcon = makeIcon('SwordIcon', () => (
+  <>
+    <path d="M14.5 17.5L3 6V3h3l11.5 11.5" />
+    <path d="M13 19l6-6" />
+    <path d="M16 16l4 4" />
+    <path d="M19 21l2-2" />
+  </>
+))
