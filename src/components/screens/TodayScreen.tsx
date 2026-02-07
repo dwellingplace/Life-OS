@@ -14,10 +14,12 @@ import { DailyTodoCard } from '@/components/cards/DailyTodoCard'
 import { WorkoutCard } from '@/components/cards/WorkoutCard'
 import { MoneyMinuteCard } from '@/components/cards/MoneyMinuteCard'
 import WorkoutSessionScreen from '@/components/screens/WorkoutSessionScreen'
+import { GlassSheet } from '@/components/ui/GlassSheet'
 import { useToday } from '@/hooks/useToday'
 import { useJournal } from '@/hooks/useJournal'
 import { useSupportingModules } from '@/hooks/useSupportingModules'
 import { useInstanceEntries } from '@/hooks/useInstanceEntries'
+import useAuth from '@/hooks/useAuth'
 import type { Instance, Priority } from '@/lib/db/schema'
 import type { TimeBlock } from '@/lib/db/schema'
 
@@ -52,6 +54,7 @@ export default function TodayScreen({ onSearchPress }: TodayScreenProps) {
   const dateStr = useMemo(() => new Date().toISOString().slice(0, 10), [])
   const journal = useJournal(dateStr)
   const supporting = useSupportingModules(dateStr)
+  const auth = useAuth()
 
   // Journal section values from live data
   const journalAm = journal.entry?.sections?.prayer ?? ''
@@ -59,6 +62,9 @@ export default function TodayScreen({ onSearchPress }: TodayScreenProps) {
 
   // Workout session state
   const [workoutSessionId, setWorkoutSessionId] = useState<string | null>(null)
+
+  // Settings sheet state
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   // Edit Ladder state
   const [editLadder, setEditLadder] = useState<{ isOpen: boolean; title: string }>({
@@ -375,7 +381,7 @@ export default function TodayScreen({ onSearchPress }: TodayScreenProps) {
         title={headerDate}
         syncStatus="synced"
         onSearchPress={onSearchPress}
-        onSettingsPress={noop}
+        onSettingsPress={() => setSettingsOpen(true)}
       />
 
       <div style={{ padding: '0 var(--space-4)' }}>
@@ -489,6 +495,115 @@ export default function TodayScreen({ onSearchPress }: TodayScreenProps) {
           onClose={() => setWorkoutSessionId(null)}
         />
       )}
+
+      {/* Settings Sheet */}
+      <GlassSheet
+        isOpen={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        title="Settings"
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+          {/* Account info */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 'var(--space-3)',
+              padding: 'var(--space-3)',
+              borderRadius: 'var(--radius-md)',
+              background: 'var(--glass-bg-secondary)',
+              border: '1px solid var(--glass-border)',
+            }}
+          >
+            {auth.imageUrl ? (
+              <img
+                src={auth.imageUrl}
+                alt=""
+                style={{
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: 'var(--radius-full)',
+                  objectFit: 'cover',
+                  flexShrink: 0,
+                }}
+              />
+            ) : (
+              <div
+                style={{
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: 'var(--radius-full)',
+                  background: 'var(--accent-subtle)',
+                  border: '1px solid var(--accent-muted)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 'var(--text-lg)',
+                  color: 'var(--accent)',
+                  flexShrink: 0,
+                }}
+              >
+                {(auth.fullName ?? auth.email ?? '?')[0].toUpperCase()}
+              </div>
+            )}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div
+                style={{
+                  fontSize: 'var(--text-base)',
+                  fontWeight: 600,
+                  color: 'var(--text-primary)',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {auth.fullName ?? 'User'}
+              </div>
+              {auth.email && (
+                <div
+                  style={{
+                    fontSize: 'var(--text-xs)',
+                    color: 'var(--text-tertiary)',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {auth.email}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Logout button */}
+          <button
+            type="button"
+            onClick={async () => {
+              setSettingsOpen(false)
+              await auth.logout()
+            }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 'var(--space-2)',
+              padding: 'var(--space-3) var(--space-4)',
+              borderRadius: 'var(--radius-md)',
+              background: 'rgba(239, 68, 68, 0.1)',
+              border: '1px solid rgba(239, 68, 68, 0.2)',
+              color: '#EF4444',
+              fontSize: 'var(--text-base)',
+              fontWeight: 600,
+              fontFamily: 'var(--font-sans)',
+              cursor: 'pointer',
+              minHeight: 'var(--tap-min)',
+              width: '100%',
+            }}
+          >
+            Log Out
+          </button>
+        </div>
+      </GlassSheet>
     </div>
   )
 }

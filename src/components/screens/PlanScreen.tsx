@@ -19,8 +19,10 @@ import {
 } from '@/components/ui/Icons'
 import Header from '@/components/layout/Header'
 import { db } from '@/lib/db'
-import type { Template, ScheduleRule, TemplateItem, AppSettings, TemplateType } from '@/lib/db/schema'
+import type { Template, ScheduleRule, TemplateItem, AppSettings, TemplateType, TimeBlock, Instance } from '@/lib/db/schema'
 import { useLiveQuery } from 'dexie-react-hooks'
+import { v4 as uuid } from 'uuid'
+import { getDateStr } from '@/lib/engine/todayGenerator'
 
 // ── Types ──
 
@@ -292,6 +294,8 @@ export default function PlanScreen({ onSearchPress }: PlanScreenProps) {
           <CustomizeView
             templates={templates}
             settings={settings}
+            templateItemsByTemplateId={templateItemsByTemplateId}
+            scheduleRulesByTemplateId={scheduleRulesByTemplateId}
             isLoading={isLoading}
           />
         )}
@@ -326,11 +330,15 @@ export default function PlanScreen({ onSearchPress }: PlanScreenProps) {
 interface CustomizeViewProps {
   templates: Template[]
   settings: AppSettings | undefined
+  templateItemsByTemplateId: Record<string, TemplateItem[]>
+  scheduleRulesByTemplateId: Record<string, ScheduleRule[]>
   isLoading: boolean
 }
 
-function CustomizeView({ templates, settings, isLoading }: CustomizeViewProps) {
+function CustomizeView({ templates, settings, templateItemsByTemplateId, scheduleRulesByTemplateId, isLoading }: CustomizeViewProps) {
   const currentPreset = settings?.todayPrefs?.preset ?? 'standard'
+  const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null)
+  const [detailOpen, setDetailOpen] = useState(false)
 
   const handlePresetSelect = useCallback(async (preset: Preset) => {
     await db.appSettings.update('user-settings', {
@@ -347,6 +355,34 @@ function CustomizeView({ templates, settings, isLoading }: CustomizeViewProps) {
       updatedAt: new Date().toISOString(),
     })
   }, [])
+
+  const handleOpenDetail = useCallback((template: Template) => {
+    setSelectedTemplate(template)
+    setDetailOpen(true)
+  }, [])
+
+  const handleCloseDetail = useCallback(() => {
+    setDetailOpen(false)
+    setSelectedTemplate(null)
+  }, [])
+
+  const handleToggleSelectedActive = useCallback(async () => {
+    if (!selectedTemplate) return
+    const newActive = !selectedTemplate.isActive
+    await db.templates.update(selectedTemplate.id, {
+      isActive: newActive,
+      disabledAt: newActive ? undefined : new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    })
+  }, [selectedTemplate])
+
+  const handleUpdateSelectedName = useCallback(async (name: string) => {
+    if (!selectedTemplate) return
+    await db.templates.update(selectedTemplate.id, {
+      name,
+      updatedAt: new Date().toISOString(),
+    })
+  }, [selectedTemplate])
 
   if (isLoading) {
     return <ShimmerSkeleton count={4} height={72} />
@@ -441,6 +477,7 @@ function CustomizeView({ templates, settings, isLoading }: CustomizeViewProps) {
                   key={template.id}
                   template={template}
                   onToggle={() => handleToggleTemplate(template)}
+                  onClick={() => handleOpenDetail(template)}
                   animationDelay={400 + i * 60}
                   isLast={i === templates.length - 1}
                 />
@@ -449,6 +486,19 @@ function CustomizeView({ templates, settings, isLoading }: CustomizeViewProps) {
           </div>
         </GlassCard>
       </section>
+
+      {/* Template Detail Sheet (from Customize) */}
+      {selectedTemplate && (
+        <TemplateDetailSheet
+          isOpen={detailOpen}
+          onClose={handleCloseDetail}
+          template={selectedTemplate}
+          items={templateItemsByTemplateId[selectedTemplate.id] ?? []}
+          scheduleRules={scheduleRulesByTemplateId[selectedTemplate.id] ?? []}
+          onToggleActive={handleToggleSelectedActive}
+          onUpdateName={handleUpdateSelectedName}
+        />
+      )}
     </div>
   )
 }
@@ -516,11 +566,12 @@ function PresetButton({ label, description, isSelected, onClick }: PresetButtonP
 interface ModuleToggleRowProps {
   template: Template
   onToggle: () => void
+  onClick?: () => void
   animationDelay: number
   isLast: boolean
 }
 
-function ModuleToggleRow({ template, onToggle, animationDelay, isLast }: ModuleToggleRowProps) {
+function ModuleToggleRow({ template, onToggle, onClick, animationDelay, isLast }: ModuleToggleRowProps) {
   const icon = getTemplateIcon(template)
 
   const rowStyle: CSSProperties = {
@@ -552,8 +603,28 @@ function ModuleToggleRow({ template, onToggle, animationDelay, isLast }: ModuleT
 
   return (
     <div style={rowStyle}>
-      <span style={iconStyle} aria-hidden="true">{icon}</span>
-      <span style={nameStyle}>{template.name}</span>
+      <button
+        type="button"
+        onClick={onClick}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 'var(--space-3)',
+          flex: 1,
+          background: 'none',
+          border: 'none',
+          padding: 0,
+          cursor: onClick ? 'pointer' : 'default',
+          fontFamily: 'var(--font-sans)',
+          textAlign: 'left',
+          minWidth: 0,
+        }}
+        aria-label={`View ${template.name} details`}
+      >
+        <span style={iconStyle} aria-hidden="true">{icon}</span>
+        <span style={nameStyle}>{template.name}</span>
+        {onClick && <ChevronRightIcon size={14} color="var(--text-tertiary)" />}
+      </button>
       <ToggleSwitch
         checked={template.isActive}
         onChange={onToggle}
@@ -932,11 +1003,14 @@ function TemplateDetailSheet({
 }: TemplateDetailSheetProps) {
   const [editingName, setEditingName] = useState(false)
   const [nameValue, setNameValue] = useState(template.name)
+  const [addToDate, setAddToDate] = useState(() => getDateStr())
+  const [addedConfirm, setAddedConfirm] = useState(false)
 
   // Reset name value when template changes
   React.useEffect(() => {
     setNameValue(template.name)
     setEditingName(false)
+    setAddedConfirm(false)
   }, [template.id, template.name])
 
   const handleSaveName = useCallback(() => {
@@ -945,6 +1019,35 @@ function TemplateDetailSheet({
     }
     setEditingName(false)
   }, [nameValue, template.name, onUpdateName])
+
+  const handleAddToDay = useCallback(async () => {
+    const now = new Date().toISOString()
+    const timeBlock = scheduleRules.length > 0 ? scheduleRules[0].timeBlock : 'morning'
+    const cardTypeMap: Record<string, string> = {
+      workout: 'workout', mobility: 'mobility', supplements: 'supplements',
+      'charisma-deck': 'charisma', 'work-focus': 'work-focus',
+      'audio-training': 'audio-training', finance: 'money-minute', 'custom-module': 'custom-module',
+    }
+
+    const instance: Instance = {
+      id: uuid(),
+      templateId: template.id,
+      instanceDate: addToDate,
+      timeBlock: timeBlock as TimeBlock,
+      status: 'pending',
+      isCustomized: true,
+      sortOrder: template.sortOrder,
+      cardType: cardTypeMap[template.type] ?? 'custom-module',
+      title: template.name,
+      subtitle: `${items.length} item${items.length !== 1 ? 's' : ''}`,
+      createdAt: now,
+      updatedAt: now,
+    }
+
+    await db.instances.add(instance)
+    setAddedConfirm(true)
+    setTimeout(() => setAddedConfirm(false), 2000)
+  }, [template, items, scheduleRules, addToDate])
 
   const icon = getTemplateIcon(template)
 
@@ -1238,6 +1341,47 @@ function TemplateDetailSheet({
               ))}
             </div>
           )}
+        </section>
+
+        {/* Add to Day */}
+        <section>
+          <h4 style={sectionLabelStyle}>Add to Day</h4>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 'var(--space-2)',
+              padding: 'var(--space-3)',
+              borderRadius: 'var(--radius-md)',
+              background: 'var(--glass-bg-primary)',
+              border: '1px solid var(--glass-border)',
+            }}
+          >
+            <input
+              type="date"
+              value={addToDate}
+              onChange={(e) => setAddToDate(e.target.value)}
+              style={{
+                flex: 1,
+                padding: 'var(--space-2) var(--space-3)',
+                borderRadius: 'var(--radius-sm)',
+                background: 'var(--glass-bg-secondary)',
+                border: '1px solid var(--glass-border)',
+                color: 'var(--text-primary)',
+                fontSize: 'var(--text-sm)',
+                fontFamily: 'var(--font-sans)',
+                outline: 'none',
+                colorScheme: 'dark',
+              }}
+            />
+            <GlassButton
+              variant={addedConfirm ? 'ghost' : 'primary'}
+              onClick={handleAddToDay}
+              disabled={addedConfirm}
+            >
+              {addedConfirm ? 'Added!' : 'Add'}
+            </GlassButton>
+          </div>
         </section>
 
         {/* Close Button */}
