@@ -2,6 +2,7 @@
 
 import { useState, type CSSProperties } from 'react'
 import { PRESETS, applyPreset, type OnboardingPreset, type PresetConfig } from '@/lib/onboarding/presets'
+import { seedDatabase } from '@/lib/db/seed'
 
 interface OnboardingScreenProps {
   onComplete: () => void
@@ -26,9 +27,11 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
     }
   }
 
-  const handleStart = () => {
+  const handleStart = async () => {
+    // Seed first so templates + settings record exist before applying preset
+    await seedDatabase()
     if (selectedPreset) {
-      applyPreset(selectedPreset.id)
+      await applyPreset(selectedPreset.id)
     }
     onComplete()
   }

@@ -20,7 +20,12 @@ import type {
    ============================================================ */
 
 const now = new Date().toISOString()
-const today = new Date().toISOString().split('T')[0]
+// Use local date (not UTC) so effectiveFrom/scheduledDate match the
+// todayGenerator's getDateStr() which also uses local date.
+const today = (() => {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+})()
 
 // ── Helper: Create a template + its schedule rule + its items ──
 

@@ -49,14 +49,29 @@ export async function applyPreset(preset: OnboardingPreset): Promise<void> {
 
   const now = new Date().toISOString()
 
-  // Update app settings
-  await db.appSettings.update('user-settings', {
-    onboardingComplete: true,
-    onboardingPreset: preset,
-    beginnerMode: config.beginnerMode,
-    'todayPrefs.preset': config.todayPreset,
-    updatedAt: now,
-  })
+  // Update app settings (use get+put to handle the case where the record
+  // might not exist yet, since Dexie's update() silently no-ops on missing keys)
+  const existing = await db.appSettings.get('user-settings')
+  if (existing) {
+    await db.appSettings.update('user-settings', {
+      onboardingComplete: true,
+      onboardingPreset: preset,
+      beginnerMode: config.beginnerMode,
+      todayPrefs: { ...existing.todayPrefs, preset: config.todayPreset },
+      updatedAt: now,
+    })
+  } else {
+    await db.appSettings.put({
+      id: 'user-settings',
+      onboardingComplete: true,
+      onboardingPreset: preset,
+      beginnerMode: config.beginnerMode,
+      notificationPrefs: { amAnchorTime: '07:00', pmAnchorTime: '21:00', quietHoursStart: '22:00', quietHoursEnd: '07:00', taskReminders: true },
+      workoutPrefs: { autoPrefillLastTime: true, defaultRestSeconds: 90, weightIncrement: 5, weightUnit: 'lbs' },
+      todayPrefs: { preset: config.todayPreset, busyDayActive: false },
+      updatedAt: now,
+    })
+  }
 
   // Enable/disable templates based on preset
   const templates = await db.templates.filter(t => !t.deletedAt).toArray()
