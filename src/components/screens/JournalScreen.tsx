@@ -7,6 +7,8 @@ import React, {
   useRef,
   type CSSProperties,
 } from 'react'
+import { useLiveQuery } from 'dexie-react-hooks'
+import { db } from '@/lib/db'
 import { GlassCard } from '@/components/ui/GlassCard'
 import { GlassChip } from '@/components/ui/GlassChip'
 import { GlassSheet } from '@/components/ui/GlassSheet'
@@ -251,6 +253,97 @@ const starLineRowStyle: CSSProperties = {
   WebkitTapHighlightColor: 'transparent',
 }
 
+// ── Archive Styles ──
+
+const archiveSectionHeaderStyle: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 'var(--space-2)',
+  margin: 'var(--space-6) 0 var(--space-3)',
+}
+
+const archiveSectionTitleStyle: CSSProperties = {
+  fontSize: 'var(--text-lg)',
+  fontWeight: 'var(--weight-semibold)' as unknown as number,
+  color: 'var(--text-primary)',
+  fontFamily: 'var(--font-sans)',
+  margin: 0,
+}
+
+const archiveDividerStyle: CSSProperties = {
+  flex: 1,
+  height: '1px',
+  background: 'var(--glass-border)',
+}
+
+const archiveCardHeaderStyle: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  width: '100%',
+  background: 'none',
+  border: 'none',
+  padding: 0,
+  cursor: 'pointer',
+  fontFamily: 'var(--font-sans)',
+  WebkitTapHighlightColor: 'transparent',
+  minHeight: 'var(--tap-min)',
+}
+
+const archiveDateTextStyle: CSSProperties = {
+  fontSize: 'var(--text-base)',
+  fontWeight: 'var(--weight-semibold)' as unknown as number,
+  color: 'var(--text-primary)',
+  margin: 0,
+}
+
+const archiveBadgeRowStyle: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '6px',
+  flexWrap: 'wrap',
+  marginTop: 'var(--space-1)',
+}
+
+const archiveBadgeStyle: CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '4px',
+  padding: '2px 8px',
+  borderRadius: 'var(--radius-full)',
+  background: 'var(--glass-bg-secondary)',
+  border: '1px solid var(--glass-border)',
+  fontSize: 'var(--text-xs)',
+  color: 'var(--text-secondary)',
+  fontFamily: 'var(--font-sans)',
+  lineHeight: 1.4,
+}
+
+const archiveExpandedSectionStyle: CSSProperties = {
+  padding: 'var(--space-3) 0',
+  borderTop: '1px solid var(--glass-border)',
+}
+
+const archiveExpandedLabelStyle: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 'var(--space-1)',
+  fontSize: 'var(--text-sm)',
+  fontWeight: 'var(--weight-semibold)' as unknown as number,
+  color: 'var(--text-secondary)',
+  margin: '0 0 var(--space-1)',
+  fontFamily: 'var(--font-sans)',
+}
+
+const archiveExpandedTextStyle: CSSProperties = {
+  fontSize: 'var(--text-sm)',
+  color: 'var(--text-primary)',
+  margin: 0,
+  whiteSpace: 'pre-wrap',
+  lineHeight: 1.6,
+  fontFamily: 'var(--font-sans)',
+}
+
 // ── Main Screen ──
 
 interface JournalScreenProps {
@@ -269,8 +362,34 @@ export default function JournalScreen({ onSearchPress }: JournalScreenProps) {
     section: '',
     lines: [],
   })
+  const [expandedArchiveIds, setExpandedArchiveIds] = useState<Set<string>>(new Set())
+
+  // Live query for past journal entries (all entries except today's)
+  const pastEntries = useLiveQuery(
+    () =>
+      db.journalEntries
+        .filter((e) => !e.deletedAt && e.entryDate !== dateStr)
+        .toArray()
+        .then((entries) => entries.sort((a, b) => b.entryDate.localeCompare(a.entryDate))),
+    [dateStr],
+    [] as JournalEntry[]
+  )
 
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // ── Archive toggle handler ──
+
+  const toggleArchiveEntry = useCallback((id: string) => {
+    setExpandedArchiveIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        next.add(id)
+      }
+      return next
+    })
+  }, [])
 
   // ── Section handlers ──
 
@@ -568,6 +687,134 @@ export default function JournalScreen({ onSearchPress }: JournalScreenProps) {
             </p>
           )}
         </GlassCard>
+
+        {/* ── Archive Section ── */}
+        {pastEntries.length > 0 && (
+          <>
+            {/* Section divider with label */}
+            <div style={archiveSectionHeaderStyle}>
+              <BookIcon size={18} color="var(--text-tertiary)" />
+              <span style={archiveSectionTitleStyle}>Archive</span>
+              <div style={archiveDividerStyle} />
+              <span
+                style={{
+                  fontSize: 'var(--text-xs)',
+                  color: 'var(--text-tertiary)',
+                  fontFamily: 'var(--font-sans)',
+                }}
+              >
+                {pastEntries.length} {pastEntries.length === 1 ? 'entry' : 'entries'}
+              </span>
+            </div>
+
+            {/* Past entry cards */}
+            {pastEntries.map((entry, idx) => {
+              const isExpanded = expandedArchiveIds.has(entry.id)
+              const sections = entry.sections ?? {}
+              const nonEmptySections = JOURNAL_SECTIONS.filter(
+                (s) => sections[s.key]?.trim()
+              )
+
+              return (
+                <GlassCard
+                  key={entry.id}
+                  padding="md"
+                  animationDelay={600 + idx * 60}
+                >
+                  {/* Collapsed header */}
+                  <button
+                    style={archiveCardHeaderStyle}
+                    onClick={() => toggleArchiveEntry(entry.id)}
+                    aria-expanded={isExpanded}
+                    aria-label={`${isExpanded ? 'Collapse' : 'Expand'} journal entry from ${formatDate(entry.entryDate)}`}
+                  >
+                    <div>
+                      <p style={archiveDateTextStyle}>
+                        {formatDate(entry.entryDate)}
+                      </p>
+                      {!isExpanded && nonEmptySections.length > 0 && (
+                        <div style={archiveBadgeRowStyle}>
+                          {nonEmptySections.map((s) => (
+                            <span key={s.key} style={archiveBadgeStyle}>
+                              {s.emoji} {s.title}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      {!isExpanded && nonEmptySections.length === 0 && (
+                        <p
+                          style={{
+                            fontSize: 'var(--text-xs)',
+                            color: 'var(--text-tertiary)',
+                            margin: 'var(--space-1) 0 0',
+                            fontFamily: 'var(--font-sans)',
+                          }}
+                        >
+                          Empty entry
+                        </p>
+                      )}
+                    </div>
+                    <span
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        transition: 'transform var(--duration-fast) var(--ease-out)',
+                        transform: isExpanded ? 'rotate(0deg)' : 'rotate(-90deg)',
+                        flexShrink: 0,
+                      }}
+                    >
+                      <ChevronDownIcon size={18} color="var(--text-tertiary)" />
+                    </span>
+                  </button>
+
+                  {/* Expanded content (read-only) */}
+                  {isExpanded && (
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 0,
+                        marginTop: 'var(--space-2)',
+                      }}
+                    >
+                      {nonEmptySections.length > 0 ? (
+                        nonEmptySections.map((s, sIdx) => (
+                          <div
+                            key={s.key}
+                            style={{
+                              ...archiveExpandedSectionStyle,
+                              ...(sIdx === 0 ? { borderTop: '1px solid var(--glass-border)' } : {}),
+                            }}
+                          >
+                            <p style={archiveExpandedLabelStyle}>
+                              <span>{s.emoji}</span> {s.title}
+                            </p>
+                            <p style={archiveExpandedTextStyle}>
+                              {sections[s.key]}
+                            </p>
+                          </div>
+                        ))
+                      ) : (
+                        <div style={archiveExpandedSectionStyle}>
+                          <p
+                            style={{
+                              fontSize: 'var(--text-sm)',
+                              color: 'var(--text-tertiary)',
+                              margin: 0,
+                              fontStyle: 'italic',
+                            }}
+                          >
+                            No content was written for this day.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </GlassCard>
+              )
+            })}
+          </>
+        )}
       </div>
     )
   }

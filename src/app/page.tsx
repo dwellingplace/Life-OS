@@ -30,10 +30,10 @@ export default function HomePage() {
 
   return (
     <AppShell>
-      {(activeTab: TabId, onSearchPress: () => void) => {
+      {(activeTab: TabId, onSearchPress: () => void, onTabChange: (tab: TabId) => void) => {
         switch (activeTab) {
           case 'today':
-            return <TodayScreen onSearchPress={onSearchPress} />
+            return <TodayScreen onSearchPress={onSearchPress} onTabChange={onTabChange} />
           case 'tasks':
             return <TasksScreen onSearchPress={onSearchPress} />
           case 'journal':

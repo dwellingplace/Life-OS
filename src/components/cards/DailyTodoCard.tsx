@@ -16,6 +16,7 @@ export interface DailyTask {
 export interface DailyTodoCardProps {
   tasks: DailyTask[];
   onToggleTask: (id: string) => void;
+  onTaskTap?: (id: string) => void;
   onViewAll: () => void;
 }
 
@@ -37,6 +38,7 @@ const priorityStyles: Record<1 | 2 | 3, CSSProperties> = {
 export function DailyTodoCard({
   tasks,
   onToggleTask,
+  onTaskTap,
   onViewAll,
 }: DailyTodoCardProps) {
   const completedCount = tasks.filter((t) => t.isCompleted).length;
@@ -150,7 +152,15 @@ export function DailyTodoCard({
                   onChange={() => onToggleTask(task.id)}
                   size="sm"
                 />
-                <span style={taskTitleStyle}>{task.title}</span>
+                <span
+                  style={{ ...taskTitleStyle, cursor: onTaskTap ? 'pointer' : 'default' }}
+                  onClick={() => onTaskTap?.(task.id)}
+                  role={onTaskTap ? 'button' : undefined}
+                  tabIndex={onTaskTap ? 0 : undefined}
+                  onKeyDown={onTaskTap ? (e) => { if (e.key === 'Enter') onTaskTap(task.id) } : undefined}
+                >
+                  {task.title}
+                </span>
               </div>
               {task.dueTime && (
                 <span style={timeBadgeStyle}>{task.dueTime}</span>

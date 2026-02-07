@@ -104,10 +104,11 @@ interface TaskRowProps {
   onToggle: (id: string) => void
   onTap: (task: Task) => void
   onLongPress: (task: Task) => void
+  onToggleTop3: (task: Task) => void
   animationDelay?: number
 }
 
-function TaskRow({ task, onToggle, onTap, onLongPress, animationDelay }: TaskRowProps) {
+function TaskRow({ task, onToggle, onTap, onLongPress, onToggleTop3, animationDelay }: TaskRowProps) {
   const isCompleted = task.status === 'completed'
 
   const rowStyle: CSSProperties = {
@@ -178,7 +179,28 @@ function TaskRow({ task, onToggle, onTap, onLongPress, animationDelay }: TaskRow
       <div style={metaStyle}>
         {task.dueTime && <TimeBadge time={task.dueTime} />}
         {task.priority !== 'p3' && <PriorityBadge priority={task.priority} />}
-        {task.isTop3 && <StarIcon size={14} color="var(--accent)" />}
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            onToggleTop3(task)
+          }}
+          aria-label={task.isTop3 ? 'Remove from Top 3' : 'Add to Top 3'}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            padding: '4px',
+            margin: '-4px',
+            WebkitTapHighlightColor: 'transparent',
+            opacity: task.isTop3 ? 1 : 0.35,
+            transition: 'opacity var(--duration-fast) var(--ease-out)',
+          }}
+        >
+          <StarIcon size={14} color={task.isTop3 ? 'var(--accent)' : 'var(--text-tertiary)'} />
+        </button>
       </div>
     </div>
   )
@@ -238,6 +260,17 @@ export default function TasksScreen({ onSearchPress }: TasksScreenProps) {
     setSnoozeOpen(false)
     setSnoozeTargetId(null)
   }, [])
+
+  const handleToggleTop3 = useCallback(
+    async (task: Task) => {
+      if (task.isTop3) {
+        await tasks.demoteFromTop3(task.id)
+      } else {
+        await tasks.promoteToTop3(task.id)
+      }
+    },
+    [tasks]
+  )
 
   const handleAddTask = useCallback(async () => {
     // Placeholder: will be wired to a creation sheet later
@@ -396,6 +429,7 @@ export default function TasksScreen({ onSearchPress }: TasksScreenProps) {
             onToggle={tasks.toggleTask}
             onTap={handleTaskTap}
             onLongPress={handleTaskLongPress}
+            onToggleTop3={handleToggleTop3}
             animationDelay={250 + i * 50}
           />
         ))}
@@ -482,6 +516,7 @@ export default function TasksScreen({ onSearchPress }: TasksScreenProps) {
                   onToggle={tasks.toggleTask}
                   onTap={handleTaskTap}
                   onLongPress={handleTaskLongPress}
+                  onToggleTop3={handleToggleTop3}
                   animationDelay={(delay += 50)}
                 />
               ))}
@@ -509,6 +544,7 @@ export default function TasksScreen({ onSearchPress }: TasksScreenProps) {
                   onToggle={tasks.toggleTask}
                   onTap={handleTaskTap}
                   onLongPress={handleTaskLongPress}
+                  onToggleTop3={handleToggleTop3}
                   animationDelay={(delay += 50)}
                 />
               ))}
@@ -536,6 +572,7 @@ export default function TasksScreen({ onSearchPress }: TasksScreenProps) {
                   onToggle={tasks.toggleTask}
                   onTap={handleTaskTap}
                   onLongPress={handleTaskLongPress}
+                  onToggleTop3={handleToggleTop3}
                   animationDelay={(delay += 50)}
                 />
               ))}
@@ -591,6 +628,7 @@ export default function TasksScreen({ onSearchPress }: TasksScreenProps) {
                     onToggle={tasks.toggleTask}
                     onTap={handleTaskTap}
                     onLongPress={handleTaskLongPress}
+                    onToggleTop3={handleToggleTop3}
                     animationDelay={(delay += 50)}
                   />
                 ))}
@@ -670,6 +708,7 @@ export default function TasksScreen({ onSearchPress }: TasksScreenProps) {
                   onToggle={tasks.toggleTask}
                   onTap={handleTaskTap}
                   onLongPress={handleTaskLongPress}
+                  onToggleTop3={handleToggleTop3}
                   animationDelay={(delay += 40)}
                 />
               ))}
@@ -890,6 +929,7 @@ export default function TasksScreen({ onSearchPress }: TasksScreenProps) {
         subtasks={tasks.subtasks.filter((s) => s.taskId === selectedTask?.id)}
         project={tasks.projects.find((p) => p.id === selectedTask?.projectId) ?? null}
         onToggle={tasks.toggleTask}
+        onUpdate={tasks.updateTask}
         onSnooze={handleOpenSnooze}
         onPromoteTop3={tasks.promoteToTop3}
         onDemoteTop3={tasks.demoteFromTop3}

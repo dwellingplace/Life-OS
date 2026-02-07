@@ -10,6 +10,8 @@ import {
   spawnEncounter,
   getCharacter,
 } from './repository'
+import { ENEMIES } from './engine'
+import { db } from '@/lib/db'
 import { getBridgedUserId } from '@/lib/auth/bridge'
 
 /**
@@ -41,6 +43,9 @@ export async function onWorkoutComplete(instanceId: string, completedSets: numbe
 
   // Spawn encounter
   await spawnEncounter(userId, 'fatigue_beast', 'workout_complete')
+
+  // Check usage-based spawning
+  await checkUsageEncounter()
 }
 
 /**
@@ -71,6 +76,9 @@ export async function onTaskComplete(taskId: string, isTop3: boolean, isHighPrio
   if (isHighPriority) {
     await grantXp(userId, 'tasks', 'complete_high_priority', `${taskId}_hp`, 'FOC', 40)
   }
+
+  // Check usage-based spawning
+  await checkUsageEncounter()
 }
 
 /**
@@ -102,6 +110,9 @@ export async function onJournalSave(entryId: string, wordCount: number): Promise
     await grantXp(userId, 'journal', 'write_entry', entryId, 'WIS', 50)
   }
   await progressQuest(userId, 'journal', 'write_entry')
+
+  // Check usage-based spawning
+  await checkUsageEncounter()
 }
 
 /**
@@ -162,6 +173,8 @@ export async function onWorkFocusComplete(instanceId: string): Promise<void> {
 
   await grantXp(userId, 'work_focus', 'complete_item', instanceId, 'FOC', 40)
   await progressQuest(userId, 'work_focus', 'complete_item')
+  // Also progress Deep Work Block quest (uses 'deep_work' action)
+  await progressQuest(userId, 'work_focus', 'deep_work')
 }
 
 /**
@@ -192,6 +205,48 @@ export async function onLeadershipComplete(instanceId: string): Promise<void> {
   await spawnEncounter(userId, 'tension_wraith', 'leadership_prompt')
 }
 
+// ── Usage-based encounter spawning ──
+
+/** Enemies eligible for random usage-based spawning (easy/medium only) */
+const RANDOM_ENCOUNTER_POOL = ENEMIES.filter(
+  (e) => e.difficulty === 'easy' || e.difficulty === 'medium'
+)
+
+/** Action thresholds at which a random encounter spawns. */
+const SPAWN_THRESHOLDS = [5, 10, 15, 20, 30]
+
+/**
+ * Check if the user's daily activity count has crossed a threshold
+ * and spawn a random encounter if so. Idempotent — uses threshold
+ * value in the sourceAction to avoid duplicates.
+ */
+async function checkUsageEncounter(): Promise<void> {
+  const userId = getBridgedUserId()
+  if (!userId) return
+
+  const character = await getCharacter()
+  if (!character) return
+
+  // Count today's XP events
+  const todayStr = new Date().toISOString().slice(0, 10)
+  const todayEvents = await db.rpgXpEvents
+    .where('userId')
+    .equals(userId)
+    .filter((e) => e.timestamp.startsWith(todayStr))
+    .count()
+
+  // Check each threshold
+  for (const threshold of SPAWN_THRESHOLDS) {
+    if (todayEvents >= threshold) {
+      // Pick a random enemy from the pool based on threshold index
+      const enemyIdx = (threshold + character.level) % RANDOM_ENCOUNTER_POOL.length
+      const enemy = RANDOM_ENCOUNTER_POOL[enemyIdx]
+      // Spawn with idempotent key including date + threshold
+      await spawnEncounter(userId, enemy.id, `usage_${todayStr}_${threshold}`)
+    }
+  }
+}
+
 /**
  * Generic instance completion handler — routes to the right XP function
  * based on cardType.
@@ -199,16 +254,21 @@ export async function onLeadershipComplete(instanceId: string): Promise<void> {
 export async function onInstanceComplete(instanceId: string, cardType: string): Promise<void> {
   switch (cardType) {
     case 'mobility':
-      return onMobilityComplete(instanceId)
+      await onMobilityComplete(instanceId); break
     case 'supplements':
-      return onSupplementsComplete(instanceId)
+      await onSupplementsComplete(instanceId); break
     case 'money-minute':
-      return onFinanceCheckIn(instanceId)
+      await onFinanceCheckIn(instanceId); break
     case 'work-focus':
-      return onWorkFocusComplete(instanceId)
+      await onWorkFocusComplete(instanceId); break
     case 'audio-training':
-      return onAudioRepComplete(instanceId)
+      await onAudioRepComplete(instanceId); break
     case 'charisma':
-      return onLeadershipComplete(instanceId)
+      await onLeadershipComplete(instanceId); break
+    default:
+      return
   }
+
+  // Check usage-based spawning after any instance completion
+  await checkUsageEncounter()
 }

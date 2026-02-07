@@ -95,6 +95,10 @@ export const ChevronRightIcon = makeIcon('ChevronRightIcon', () => (
   <path d="M9 18l6-6-6-6" />
 ))
 
+export const ChevronLeftIcon = makeIcon('ChevronLeftIcon', () => (
+  <path d="M15 18l-6-6 6-6" />
+))
+
 export const ChevronDownIcon = makeIcon('ChevronDownIcon', () => (
   <path d="M6 9l6 6 6-6" />
 ))

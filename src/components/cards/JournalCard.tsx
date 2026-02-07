@@ -1,6 +1,6 @@
 'use client';
 
-import React, { type CSSProperties } from 'react';
+import React, { useState, useEffect, useRef, type CSSProperties } from 'react';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { BookIcon, CameraIcon } from '@/components/ui/Icons';
 
@@ -19,6 +19,23 @@ export function JournalCard({
   onChange,
   onExpand,
 }: JournalCardProps) {
+  // Local state buffer to prevent the debounced DB write + useLiveQuery
+  // feedback loop from resetting the textarea while typing.
+  const [localValue, setLocalValue] = useState(value);
+  const lastEditRef = useRef(0);
+
+  useEffect(() => {
+    // Only sync from prop if we haven't typed recently (avoids overwrite during debounce)
+    if (Date.now() - lastEditRef.current > 1000) {
+      setLocalValue(value);
+    }
+  }, [value]);
+
+  const handleChange = (text: string) => {
+    lastEditRef.current = Date.now();
+    setLocalValue(text);
+    onChange(text);
+  };
   const headerStyle: CSSProperties = {
     display: 'flex',
     alignItems: 'center',
@@ -125,8 +142,8 @@ export function JournalCard({
       <textarea
         className="journal-textarea"
         style={textareaStyle}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
+        value={localValue}
+        onChange={(e) => handleChange(e.target.value)}
         placeholder="Write your thoughts..."
         rows={3}
         aria-label="Journal entry"

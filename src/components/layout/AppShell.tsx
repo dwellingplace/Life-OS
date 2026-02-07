@@ -11,7 +11,7 @@ import { getOrCreateTodayEntry, updateJournalSection } from '@/lib/repositories/
 import type { TabId } from '@/types'
 
 interface AppShellProps {
-  children: (activeTab: TabId, onSearchPress: () => void) => React.ReactNode
+  children: (activeTab: TabId, onSearchPress: () => void, onTabChange: (tab: TabId) => void) => React.ReactNode
 }
 
 export default function AppShell({ children }: AppShellProps) {
@@ -52,7 +52,7 @@ export default function AppShell({ children }: AppShellProps) {
           position: 'relative',
         }}
       >
-        {children(activeTab, handleSearchOpen)}
+        {children(activeTab, handleSearchOpen, setActiveTab)}
       </div>
 
       {/* Quick Add FAB */}

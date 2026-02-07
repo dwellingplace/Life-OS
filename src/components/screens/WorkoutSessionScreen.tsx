@@ -685,6 +685,15 @@ export default function WorkoutSessionScreen({
   const session = useWorkoutSession(instanceId)
   const [isCompleting, setIsCompleting] = useState(false)
 
+  // Close on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [onClose])
+
   // Settings defaults
   const defaultRestSeconds = 90
   const weightIncrement = 5

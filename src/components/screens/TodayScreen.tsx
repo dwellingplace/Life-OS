@@ -4,6 +4,11 @@ import React, { useState, useCallback, useMemo } from 'react'
 import Header from '@/components/layout/Header'
 import BlockHeader from '@/components/layout/BlockHeader'
 import EditLadderSheet from '@/components/layout/EditLadderSheet'
+import TaskDetailSheet from '@/components/layout/TaskDetailSheet'
+import { ChevronLeftIcon, ChevronRightIcon, MoreHorizontalIcon, XIcon } from '@/components/ui/Icons'
+import { GlassButton } from '@/components/ui/GlassButton'
+import { db } from '@/lib/db'
+import { getDateStr } from '@/lib/engine/todayGenerator'
 import { Top3Card } from '@/components/cards/Top3Card'
 import { CharismaCard } from '@/components/cards/CharismaCard'
 import { MobilityCard } from '@/components/cards/MobilityCard'
@@ -20,7 +25,13 @@ import { useJournal } from '@/hooks/useJournal'
 import { useSupportingModules } from '@/hooks/useSupportingModules'
 import { useInstanceEntries } from '@/hooks/useInstanceEntries'
 import useAuth from '@/hooks/useAuth'
-import type { Instance, Priority } from '@/lib/db/schema'
+import {
+  updateTask as repoUpdateTask,
+  deleteTask as repoDeleteTask,
+  promoteToTop3 as repoPromoteToTop3,
+  demoteFromTop3 as repoDemoteFromTop3,
+} from '@/lib/repositories/taskRepository'
+import type { Instance, Task, Priority } from '@/lib/db/schema'
 import type { TimeBlock } from '@/lib/db/schema'
 
 // ── Priority converter: 'p1'|'p2'|'p3' → 1|2|3 ──
@@ -29,13 +40,20 @@ function priorityToNumber(p: Priority): 1 | 2 | 3 {
   return map[p]
 }
 
-// ── Format today's date for header ──
-function formatHeaderDate(): string {
-  return new Date().toLocaleDateString('en-US', {
+// ── Format date for header ──
+function formatHeaderDate(dateStr?: string): string {
+  const d = dateStr ? new Date(dateStr + 'T12:00:00') : new Date()
+  return d.toLocaleDateString('en-US', {
     weekday: 'long',
     month: 'short',
     day: 'numeric',
   })
+}
+
+function addDaysToDate(dateStr: string, days: number): string {
+  const d = new Date(dateStr + 'T12:00:00')
+  d.setDate(d.getDate() + days)
+  return getDateStr(d)
 }
 
 function getGreeting(): string {
@@ -47,14 +65,23 @@ function getGreeting(): string {
 
 interface TodayScreenProps {
   onSearchPress?: () => void
+  onTabChange?: (tab: import('@/types').TabId) => void
 }
 
-export default function TodayScreen({ onSearchPress }: TodayScreenProps) {
-  const today = useToday()
-  const dateStr = useMemo(() => new Date().toISOString().slice(0, 10), [])
+export default function TodayScreen({ onSearchPress, onTabChange }: TodayScreenProps) {
+  const todayDateStr = useMemo(() => getDateStr(), [])
+  const [viewDate, setViewDate] = useState(todayDateStr)
+  const isToday = viewDate === todayDateStr
+
+  const today = useToday(viewDate)
+  const dateStr = viewDate
   const journal = useJournal(dateStr)
   const supporting = useSupportingModules(dateStr)
   const auth = useAuth()
+
+  const goToPrevDay = useCallback(() => setViewDate(d => addDaysToDate(d, -1)), [])
+  const goToNextDay = useCallback(() => setViewDate(d => addDaysToDate(d, 1)), [])
+  const goToToday = useCallback(() => setViewDate(todayDateStr), [todayDateStr])
 
   // Journal section values from live data
   const journalAm = journal.entry?.sections?.prayer ?? ''
@@ -65,6 +92,61 @@ export default function TodayScreen({ onSearchPress }: TodayScreenProps) {
 
   // Settings sheet state
   const [settingsOpen, setSettingsOpen] = useState(false)
+
+  // Task detail sheet state
+  const [taskDetailOpen, setTaskDetailOpen] = useState(false)
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null)
+
+  const handleTaskTap = useCallback((taskId: string) => {
+    const task = today.tasks.find((t) => t.id === taskId)
+    if (task) {
+      setSelectedTask(task)
+      setTaskDetailOpen(true)
+    }
+  }, [today.tasks])
+
+  const handleCloseTaskDetail = useCallback(() => {
+    setTaskDetailOpen(false)
+    setSelectedTask(null)
+  }, [])
+
+  const handleUpdateTask = useCallback(async (id: string, updates: Partial<Task>) => {
+    await repoUpdateTask(id, updates)
+  }, [])
+
+  const handleDeleteTask = useCallback(async (id: string) => {
+    await repoDeleteTask(id)
+    setTaskDetailOpen(false)
+    setSelectedTask(null)
+  }, [])
+
+  const handlePromoteTop3 = useCallback(async (id: string) => {
+    await repoPromoteToTop3(id, dateStr)
+  }, [dateStr])
+
+  const handleDemoteTop3 = useCallback(async (id: string) => {
+    await repoDemoteFromTop3(id)
+  }, [])
+
+  // Module action sheet state
+  const [moduleAction, setModuleAction] = useState<{ isOpen: boolean; instance: Instance | null }>({
+    isOpen: false,
+    instance: null,
+  })
+
+  const openModuleActions = useCallback((inst: Instance) => {
+    setModuleAction({ isOpen: true, instance: inst })
+  }, [])
+
+  const closeModuleActions = useCallback(() => {
+    setModuleAction({ isOpen: false, instance: null })
+  }, [])
+
+  const removeInstance = useCallback(async (instanceId: string) => {
+    const now = new Date().toISOString()
+    await db.instances.update(instanceId, { deletedAt: now, updatedAt: now })
+    closeModuleActions()
+  }, [closeModuleActions])
 
   // Edit Ladder state
   const [editLadder, setEditLadder] = useState<{ isOpen: boolean; title: string }>({
@@ -95,7 +177,7 @@ export default function TodayScreen({ onSearchPress }: TodayScreenProps) {
     return blocks
   }, [today.instances])
 
-  const headerDate = useMemo(() => formatHeaderDate(), [])
+  const headerDate = useMemo(() => formatHeaderDate(viewDate), [viewDate])
   const greetingText = useMemo(() => getGreeting(), [])
 
   // ── Card Prop Builders ──
@@ -170,6 +252,8 @@ export default function TodayScreen({ onSearchPress }: TodayScreenProps) {
 
   const totalItems = today.instances.length + today.tasks.length
   const noop = useCallback(() => {}, [])
+  const goToJournal = useCallback(() => onTabChange?.('journal'), [onTabChange])
+  const goToTasks = useCallback(() => onTabChange?.('tasks'), [onTabChange])
 
   const handleToggleItem = useCallback(
     (instanceId: string) => (itemId: string) => {
@@ -337,21 +421,49 @@ export default function TodayScreen({ onSearchPress }: TodayScreenProps) {
       <React.Fragment key={block}>
         <BlockHeader block={block} animationDelay={delay} />
         <CardStack>
-          {instances.map((inst) => renderCard(inst))}
+          {instances.map((inst) => (
+            <div key={`wrap-${inst.id}`} style={{ position: 'relative' }}>
+              {renderCard(inst)}
+              <button
+                onClick={() => openModuleActions(inst)}
+                aria-label={`Actions for ${inst.title}`}
+                style={{
+                  position: 'absolute',
+                  top: 10,
+                  right: 10,
+                  width: 28,
+                  height: 28,
+                  borderRadius: 'var(--radius-full)',
+                  background: 'var(--glass-bg-secondary)',
+                  border: '1px solid var(--glass-border)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  padding: 0,
+                  zIndex: 2,
+                  WebkitTapHighlightColor: 'transparent',
+                }}
+              >
+                <MoreHorizontalIcon size={16} color="var(--text-tertiary)" />
+              </button>
+            </div>
+          ))}
           {block === 'morning' && (
             <JournalCard
               title="Morning Journal"
               prompt="Set your intention for today..."
               value={journalAm}
               onChange={(text) => journal.updateSection('prayer', text)}
-              onExpand={noop}
+              onExpand={goToJournal}
             />
           )}
           {block === 'midday' && (
             <DailyTodoCard
               tasks={tasksForCard}
               onToggleTask={today.toggleTask}
-              onViewAll={noop}
+              onTaskTap={handleTaskTap}
+              onViewAll={goToTasks}
             />
           )}
           {block === 'evening' && (
@@ -360,7 +472,7 @@ export default function TodayScreen({ onSearchPress }: TodayScreenProps) {
               prompt="3 things you're grateful for..."
               value={journalPm}
               onChange={(text) => journal.updateSection('gratitude', text)}
-              onExpand={noop}
+              onExpand={goToJournal}
             />
           )}
         </CardStack>
@@ -403,6 +515,82 @@ export default function TodayScreen({ onSearchPress }: TodayScreenProps) {
           >
             {greetingText}, John
           </h2>
+          {/* ── Day Navigation ── */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 'var(--space-2)',
+              margin: 'var(--space-2) 0 0',
+            }}
+          >
+            <button
+              onClick={goToPrevDay}
+              aria-label="Previous day"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 28,
+                height: 28,
+                borderRadius: 'var(--radius-full)',
+                background: 'var(--glass-bg-secondary)',
+                border: '1px solid var(--glass-border)',
+                cursor: 'pointer',
+                padding: 0,
+                WebkitTapHighlightColor: 'transparent',
+              }}
+            >
+              <ChevronLeftIcon size={16} color="var(--text-secondary)" />
+            </button>
+            <span
+              style={{
+                fontSize: 'var(--text-sm)',
+                fontWeight: 'var(--weight-medium)' as unknown as number,
+                color: 'var(--text-secondary)',
+                minWidth: 0,
+              }}
+            >
+              {headerDate}
+            </span>
+            <button
+              onClick={goToNextDay}
+              aria-label="Next day"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 28,
+                height: 28,
+                borderRadius: 'var(--radius-full)',
+                background: 'var(--glass-bg-secondary)',
+                border: '1px solid var(--glass-border)',
+                cursor: 'pointer',
+                padding: 0,
+                WebkitTapHighlightColor: 'transparent',
+              }}
+            >
+              <ChevronRightIcon size={16} color="var(--text-secondary)" />
+            </button>
+            {!isToday && (
+              <button
+                onClick={goToToday}
+                style={{
+                  padding: '2px 10px',
+                  borderRadius: 'var(--radius-full)',
+                  background: 'var(--accent-subtle)',
+                  border: '1px solid var(--accent-muted)',
+                  color: 'var(--accent)',
+                  fontSize: 'var(--text-xs)',
+                  cursor: 'pointer',
+                  fontFamily: 'var(--font-sans)',
+                  WebkitTapHighlightColor: 'transparent',
+                }}
+              >
+                Today
+              </button>
+            )}
+          </div>
           <p
             style={{
               fontSize: 'var(--text-sm)',
@@ -487,6 +675,53 @@ export default function TodayScreen({ onSearchPress }: TodayScreenProps) {
           console.log('Edit scope selected:', scope)
         }}
       />
+
+      {/* Task Detail Sheet */}
+      <TaskDetailSheet
+        isOpen={taskDetailOpen}
+        onClose={handleCloseTaskDetail}
+        task={selectedTask}
+        onToggle={async (id: string) => { await today.toggleTask(id) }}
+        onUpdate={handleUpdateTask}
+        onSnooze={() => {}}
+        onPromoteTop3={handlePromoteTop3}
+        onDemoteTop3={handleDemoteTop3}
+        onDelete={handleDeleteTask}
+      />
+
+      {/* Module Action Sheet */}
+      <GlassSheet
+        isOpen={moduleAction.isOpen}
+        onClose={closeModuleActions}
+        title={moduleAction.instance?.title ?? 'Module'}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+          <GlassButton
+            variant="secondary"
+            size="md"
+            fullWidth
+            onClick={() => {
+              if (moduleAction.instance) {
+                closeModuleActions()
+                setEditLadder({ isOpen: true, title: moduleAction.instance.title })
+              }
+            }}
+          >
+            Edit Template
+          </GlassButton>
+          <GlassButton
+            variant="danger"
+            size="md"
+            fullWidth
+            icon={<XIcon size={16} />}
+            onClick={() => {
+              if (moduleAction.instance) removeInstance(moduleAction.instance.id)
+            }}
+          >
+            Remove for Today
+          </GlassButton>
+        </div>
+      </GlassSheet>
 
       {/* Workout Session Overlay */}
       {workoutSessionId && (

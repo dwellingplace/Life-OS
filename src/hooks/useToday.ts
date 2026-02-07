@@ -6,6 +6,7 @@ import { db } from '@/lib/db'
 import type { Instance, Task, TemplateItem, CharismaReminder, AppSettings } from '@/lib/db/schema'
 import { generateToday, getDateStr, getTodayInstances } from '@/lib/engine/todayGenerator'
 import { seedDatabase } from '@/lib/db/seed'
+import { toggleTask as repoToggleTask } from '@/lib/repositories/taskRepository'
 
 interface TodayData {
   isLoading: boolean
@@ -23,11 +24,12 @@ interface TodayData {
   toggleTemplateItem: (instanceId: string, templateItemId: string) => void
 }
 
-export function useToday(): TodayData {
+export function useToday(viewDate?: string): TodayData {
   const [isLoading, setIsLoading] = useState(true)
   const [isSeeded, setIsSeeded] = useState(false)
   const [busyDay, setBusyDay] = useState(false)
-  const dateStr = useMemo(() => getDateStr(), [])
+  const todayStr = useMemo(() => getDateStr(), [])
+  const dateStr = viewDate ?? todayStr
 
   // Seed + Generate on mount
   useEffect(() => {
@@ -137,21 +139,7 @@ export function useToday(): TodayData {
   // ── Actions ──
 
   const toggleTask = useCallback(async (taskId: string) => {
-    const task = await db.tasks.get(taskId)
-    if (!task) return
-    if (task.status === 'completed') {
-      await db.tasks.update(taskId, {
-        status: 'active' as const,
-        completedAt: undefined,
-        updatedAt: new Date().toISOString(),
-      })
-    } else {
-      await db.tasks.update(taskId, {
-        status: 'completed' as const,
-        completedAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      })
-    }
+    await repoToggleTask(taskId)
   }, [])
 
   const toggleTemplateItem = useCallback(async (instanceId: string, templateItemId: string) => {

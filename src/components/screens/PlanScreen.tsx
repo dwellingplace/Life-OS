@@ -1006,12 +1006,168 @@ function TemplateDetailSheet({
   const [addToDate, setAddToDate] = useState(() => getDateStr())
   const [addedConfirm, setAddedConfirm] = useState(false)
 
+  // ── Schedule editing state ──
+  // We edit the first schedule rule (or create a new one if none exist).
+  const editingRule = scheduleRules.length > 0 ? scheduleRules[0] : null
+  const [editDays, setEditDays] = useState<number[]>(editingRule?.daysOfWeek ?? [])
+  const [editTimeBlock, setEditTimeBlock] = useState<TimeBlock>(editingRule?.timeBlock ?? 'morning')
+  const [scheduleChanged, setScheduleChanged] = useState(false)
+  const [scheduleSaving, setScheduleSaving] = useState(false)
+  const [scheduleSaved, setScheduleSaved] = useState(false)
+
+  // Sync schedule editing state when the rule data changes (e.g. live query update)
+  React.useEffect(() => {
+    const rule = scheduleRules.length > 0 ? scheduleRules[0] : null
+    setEditDays(rule?.daysOfWeek ?? [])
+    setEditTimeBlock(rule?.timeBlock ?? 'morning')
+    setScheduleChanged(false)
+    setScheduleSaved(false)
+  }, [scheduleRules])
+
+  const handleToggleDay = useCallback((dow: number) => {
+    setEditDays(prev => {
+      const next = prev.includes(dow) ? prev.filter(d => d !== dow) : [...prev, dow].sort((a, b) => a - b)
+      return next
+    })
+    setScheduleChanged(true)
+    setScheduleSaved(false)
+  }, [])
+
+  const handleSetTimeBlock = useCallback((block: TimeBlock) => {
+    setEditTimeBlock(block)
+    setScheduleChanged(true)
+    setScheduleSaved(false)
+  }, [])
+
+  const handleSaveSchedule = useCallback(async () => {
+    setScheduleSaving(true)
+    const now = new Date().toISOString()
+
+    if (editingRule) {
+      // Update existing rule
+      await db.scheduleRules.update(editingRule.id, {
+        daysOfWeek: editDays,
+        timeBlock: editTimeBlock,
+        updatedAt: now,
+      })
+    } else {
+      // Create a new rule for this template
+      await db.scheduleRules.add({
+        id: uuid(),
+        templateId: template.id,
+        daysOfWeek: editDays,
+        timeBlock: editTimeBlock,
+        repeatType: 'specific-days',
+        effectiveFrom: getDateStr(),
+        createdAt: now,
+        updatedAt: now,
+      })
+    }
+
+    setScheduleChanged(false)
+    setScheduleSaving(false)
+    setScheduleSaved(true)
+    setTimeout(() => setScheduleSaved(false), 2000)
+  }, [editingRule, editDays, editTimeBlock, template.id])
+
+  // ── Inline item editing state ──
+  // Tracks which item field is currently being edited: { itemId, field }
+  // field can be 'label' | 'sets' | 'reps' | 'weight'
+  const [editingItemField, setEditingItemField] = useState<{ itemId: string; field: string } | null>(null)
+  const [editingItemValue, setEditingItemValue] = useState('')
+  const [savingAsNew, setSavingAsNew] = useState(false)
+  const [savedAsNewConfirm, setSavedAsNewConfirm] = useState(false)
+
   // Reset name value when template changes
   React.useEffect(() => {
     setNameValue(template.name)
     setEditingName(false)
     setAddedConfirm(false)
+    setEditingItemField(null)
+    setSavedAsNewConfirm(false)
   }, [template.id, template.name])
+
+  // ── Inline item editing handlers ──
+
+  const handleStartEditItem = useCallback((itemId: string, field: string, currentValue: string) => {
+    setEditingItemField({ itemId, field })
+    setEditingItemValue(currentValue)
+  }, [])
+
+  const handleCancelEditItem = useCallback(() => {
+    setEditingItemField(null)
+    setEditingItemValue('')
+  }, [])
+
+  const handleSaveEditItem = useCallback(async () => {
+    if (!editingItemField) return
+    const { itemId, field } = editingItemField
+    const now = new Date().toISOString()
+
+    if (field === 'label') {
+      const trimmed = editingItemValue.trim()
+      if (trimmed) {
+        await db.templateItems.update(itemId, { label: trimmed, updatedAt: now })
+      }
+    } else {
+      // Numeric fields: sets, reps, weight — stored in item.config
+      const numVal = parseFloat(editingItemValue)
+      if (!isNaN(numVal) && numVal >= 0) {
+        const item = items.find(i => i.id === itemId)
+        if (item) {
+          const updatedConfig = { ...item.config, [field]: numVal }
+          await db.templateItems.update(itemId, { config: updatedConfig, updatedAt: now })
+        }
+      }
+    }
+
+    setEditingItemField(null)
+    setEditingItemValue('')
+  }, [editingItemField, editingItemValue, items])
+
+  // ── Save as New Template handler ──
+
+  const handleSaveAsNewTemplate = useCallback(async () => {
+    setSavingAsNew(true)
+    const now = new Date().toISOString()
+    const newTemplateId = crypto.randomUUID()
+
+    // Clone the template with a new ID
+    await db.templates.add({
+      id: newTemplateId,
+      type: template.type,
+      name: `${template.name} (Copy)`,
+      icon: template.icon,
+      description: template.description,
+      isActive: true,
+      config: { ...template.config },
+      version: 1,
+      sortOrder: template.sortOrder + 1,
+      createdAt: now,
+      updatedAt: now,
+    })
+
+    // Clone all template items
+    for (const item of items) {
+      await db.templateItems.add({
+        id: crypto.randomUUID(),
+        templateId: newTemplateId,
+        label: item.label,
+        itemType: item.itemType,
+        config: { ...item.config },
+        sortOrder: item.sortOrder,
+        isOptional: item.isOptional,
+        variant: item.variant,
+        normalizedExerciseId: item.normalizedExerciseId,
+        createdAt: now,
+        updatedAt: now,
+      })
+    }
+
+    setSavingAsNew(false)
+    setSavedAsNewConfirm(true)
+    setTimeout(() => setSavedAsNewConfirm(false), 2000)
+  }, [template, items])
 
   const handleSaveName = useCallback(() => {
     if (nameValue.trim() && nameValue.trim() !== template.name) {
@@ -1193,7 +1349,7 @@ function TemplateDetailSheet({
           />
         </div>
 
-        {/* Template Items */}
+        {/* Template Items (editable) */}
         <section>
           <h4 style={sectionLabelStyle}>Items ({items.length})</h4>
           {items.length === 0 ? (
@@ -1221,90 +1377,455 @@ function TemplateDetailSheet({
                 overflow: 'hidden',
               }}
             >
-              {items.map((item, i) => (
-                <div
-                  key={item.id}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 'var(--space-2)',
-                    padding: 'var(--space-2) var(--space-3)',
-                    borderBottom: i < items.length - 1 ? '1px solid var(--glass-border)' : 'none',
-                    minHeight: 'var(--tap-min)',
-                  }}
-                >
-                  <span
+              {items.map((item, i) => {
+                const cfg = item.config as Record<string, unknown>
+                const sets = cfg.sets as number | undefined
+                const reps = cfg.reps as number | undefined
+                const weight = cfg.weight as number | undefined
+                const hasNumericFields = sets !== undefined || reps !== undefined || weight !== undefined
+                const isEditingThisLabel = editingItemField?.itemId === item.id && editingItemField.field === 'label'
+
+                return (
+                  <div
+                    key={item.id}
                     style={{
-                      width: '20px',
-                      height: '20px',
-                      borderRadius: 'var(--radius-sm)',
-                      background: 'var(--glass-bg-secondary)',
-                      border: '1px solid var(--glass-border)',
                       display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: 'var(--text-xs)',
-                      color: 'var(--text-tertiary)',
-                      flexShrink: 0,
+                      flexDirection: 'column',
+                      gap: 'var(--space-1)',
+                      padding: 'var(--space-2) var(--space-3)',
+                      borderBottom: i < items.length - 1 ? '1px solid var(--glass-border)' : 'none',
+                      minHeight: 'var(--tap-min)',
                     }}
                   >
-                    {i + 1}
-                  </span>
-                  <span
-                    style={{
-                      flex: 1,
-                      fontSize: 'var(--text-sm)',
-                      color: 'var(--text-primary)',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {item.label}
-                  </span>
-                  {item.isOptional && (
-                    <span
-                      style={{
-                        fontSize: 'var(--text-xs)',
-                        color: 'var(--text-tertiary)',
-                        fontStyle: 'italic',
-                      }}
-                    >
-                      optional
-                    </span>
-                  )}
-                </div>
-              ))}
+                    {/* Row 1: index + label (editable) */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                      <span
+                        style={{
+                          width: '20px',
+                          height: '20px',
+                          borderRadius: 'var(--radius-sm)',
+                          background: 'var(--glass-bg-secondary)',
+                          border: '1px solid var(--glass-border)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: 'var(--text-xs)',
+                          color: 'var(--text-tertiary)',
+                          flexShrink: 0,
+                        }}
+                      >
+                        {i + 1}
+                      </span>
+
+                      {isEditingThisLabel ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1)', flex: 1, minWidth: 0 }}>
+                          <input
+                            type="text"
+                            value={editingItemValue}
+                            onChange={(e) => setEditingItemValue(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleSaveEditItem()
+                              if (e.key === 'Escape') handleCancelEditItem()
+                            }}
+                            autoFocus
+                            style={{
+                              flex: 1,
+                              minWidth: 0,
+                              padding: 'var(--space-1) var(--space-2)',
+                              borderRadius: 'var(--radius-sm)',
+                              background: 'var(--glass-bg-secondary)',
+                              border: '1px solid var(--accent-muted)',
+                              color: 'var(--text-primary)',
+                              fontSize: 'var(--text-sm)',
+                              fontFamily: 'var(--font-sans)',
+                              outline: 'none',
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={handleSaveEditItem}
+                            aria-label="Save item name"
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              width: '24px',
+                              height: '24px',
+                              borderRadius: 'var(--radius-sm)',
+                              background: 'var(--accent-subtle)',
+                              border: '1px solid var(--accent-muted)',
+                              color: 'var(--accent)',
+                              cursor: 'pointer',
+                              flexShrink: 0,
+                            }}
+                          >
+                            <CheckIcon size={12} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleCancelEditItem}
+                            aria-label="Cancel editing"
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              width: '24px',
+                              height: '24px',
+                              borderRadius: 'var(--radius-sm)',
+                              background: 'var(--glass-bg-secondary)',
+                              border: '1px solid var(--glass-border)',
+                              color: 'var(--text-tertiary)',
+                              cursor: 'pointer',
+                              flexShrink: 0,
+                            }}
+                          >
+                            <XIcon size={12} />
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleStartEditItem(item.id, 'label', item.label)}
+                          aria-label={`Edit exercise name: ${item.label}`}
+                          style={{
+                            flex: 1,
+                            minWidth: 0,
+                            fontSize: 'var(--text-sm)',
+                            color: 'var(--text-primary)',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            padding: 'var(--space-1) 0',
+                            fontFamily: 'var(--font-sans)',
+                            textAlign: 'left',
+                          }}
+                        >
+                          {item.label}
+                        </button>
+                      )}
+
+                      {item.isOptional && !isEditingThisLabel && (
+                        <span
+                          style={{
+                            fontSize: 'var(--text-xs)',
+                            color: 'var(--text-tertiary)',
+                            fontStyle: 'italic',
+                            flexShrink: 0,
+                          }}
+                        >
+                          optional
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Row 2: numeric config fields (sets / reps / weight) — shown if any exist */}
+                    {hasNumericFields && (
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 'var(--space-2)',
+                          paddingLeft: '28px',
+                        }}
+                      >
+                        {sets !== undefined && (
+                          <EditableConfigPill
+                            label="sets"
+                            value={sets}
+                            isEditing={editingItemField?.itemId === item.id && editingItemField.field === 'sets'}
+                            editValue={editingItemValue}
+                            onStartEdit={() => handleStartEditItem(item.id, 'sets', String(sets))}
+                            onChangeEdit={setEditingItemValue}
+                            onSaveEdit={handleSaveEditItem}
+                            onCancelEdit={handleCancelEditItem}
+                          />
+                        )}
+                        {reps !== undefined && (
+                          <EditableConfigPill
+                            label="reps"
+                            value={reps}
+                            isEditing={editingItemField?.itemId === item.id && editingItemField.field === 'reps'}
+                            editValue={editingItemValue}
+                            onStartEdit={() => handleStartEditItem(item.id, 'reps', String(reps))}
+                            onChangeEdit={setEditingItemValue}
+                            onSaveEdit={handleSaveEditItem}
+                            onCancelEdit={handleCancelEditItem}
+                          />
+                        )}
+                        {weight !== undefined && (
+                          <EditableConfigPill
+                            label="lbs"
+                            value={weight}
+                            isEditing={editingItemField?.itemId === item.id && editingItemField.field === 'weight'}
+                            editValue={editingItemValue}
+                            onStartEdit={() => handleStartEditItem(item.id, 'weight', String(weight))}
+                            onChangeEdit={setEditingItemValue}
+                            onSaveEdit={handleSaveEditItem}
+                            onCancelEdit={handleCancelEditItem}
+                          />
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           )}
         </section>
 
-        {/* Schedule Info */}
+        {/* Schedule Editor */}
         <section>
           <h4 style={sectionLabelStyle}>Schedule</h4>
-          {scheduleRules.length === 0 ? (
-            <div
-              style={{
-                padding: 'var(--space-4)',
-                textAlign: 'center',
-                color: 'var(--text-tertiary)',
-                fontSize: 'var(--text-sm)',
-                background: 'var(--glass-bg-primary)',
-                borderRadius: 'var(--radius-md)',
-                border: '1px solid var(--glass-border)',
-              }}
-            >
-              No schedule rules configured
+          <GlassCard padding="md">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+              {/* Day Picker */}
+              <div>
+                <div
+                  style={{
+                    fontSize: 'var(--text-xs)',
+                    fontWeight: 'var(--weight-medium)' as unknown as number,
+                    color: 'var(--text-secondary)',
+                    marginBottom: 'var(--space-2)',
+                  }}
+                >
+                  Days
+                </div>
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(7, 1fr)',
+                    gap: 'var(--space-1)',
+                  }}
+                  role="group"
+                  aria-label="Select days of week"
+                >
+                  {([
+                    { label: 'M', dow: 1 },
+                    { label: 'T', dow: 2 },
+                    { label: 'W', dow: 3 },
+                    { label: 'T', dow: 4 },
+                    { label: 'F', dow: 5 },
+                    { label: 'S', dow: 6 },
+                    { label: 'S', dow: 0 },
+                  ] as const).map(({ label, dow }) => {
+                    const isSelected = editDays.includes(dow)
+                    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+                    return (
+                      <button
+                        key={dow}
+                        type="button"
+                        role="checkbox"
+                        aria-checked={isSelected}
+                        aria-label={dayNames[dow]}
+                        onClick={() => handleToggleDay(dow)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          width: '100%',
+                          aspectRatio: '1',
+                          borderRadius: 'var(--radius-md)',
+                          border: `1px solid ${isSelected ? 'var(--accent-muted)' : 'var(--glass-border)'}`,
+                          background: isSelected ? 'var(--accent-subtle)' : 'var(--glass-bg-secondary)',
+                          color: isSelected ? 'var(--accent)' : 'var(--text-tertiary)',
+                          fontSize: 'var(--text-sm)',
+                          fontWeight: 'var(--weight-semibold)' as unknown as number,
+                          fontFamily: 'var(--font-sans)',
+                          cursor: 'pointer',
+                          transition: `all var(--duration-fast) var(--ease-out)`,
+                          WebkitTapHighlightColor: 'transparent',
+                          outline: 'none',
+                          minHeight: 'var(--tap-min)',
+                        }}
+                      >
+                        {label}
+                      </button>
+                    )
+                  })}
+                </div>
+                {/* Quick-select shortcuts */}
+                <div
+                  style={{
+                    display: 'flex',
+                    gap: 'var(--space-2)',
+                    marginTop: 'var(--space-2)',
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditDays([1, 2, 3, 4, 5])
+                      setScheduleChanged(true)
+                      setScheduleSaved(false)
+                    }}
+                    style={{
+                      fontSize: 'var(--text-xs)',
+                      color: 'var(--text-tertiary)',
+                      background: 'none',
+                      border: '1px solid var(--glass-border)',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '2px var(--space-2)',
+                      cursor: 'pointer',
+                      fontFamily: 'var(--font-sans)',
+                      transition: `border-color var(--duration-fast) var(--ease-out)`,
+                    }}
+                  >
+                    Weekdays
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditDays([0, 6])
+                      setScheduleChanged(true)
+                      setScheduleSaved(false)
+                    }}
+                    style={{
+                      fontSize: 'var(--text-xs)',
+                      color: 'var(--text-tertiary)',
+                      background: 'none',
+                      border: '1px solid var(--glass-border)',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '2px var(--space-2)',
+                      cursor: 'pointer',
+                      fontFamily: 'var(--font-sans)',
+                      transition: `border-color var(--duration-fast) var(--ease-out)`,
+                    }}
+                  >
+                    Weekends
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditDays([0, 1, 2, 3, 4, 5, 6])
+                      setScheduleChanged(true)
+                      setScheduleSaved(false)
+                    }}
+                    style={{
+                      fontSize: 'var(--text-xs)',
+                      color: 'var(--text-tertiary)',
+                      background: 'none',
+                      border: '1px solid var(--glass-border)',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '2px var(--space-2)',
+                      cursor: 'pointer',
+                      fontFamily: 'var(--font-sans)',
+                      transition: `border-color var(--duration-fast) var(--ease-out)`,
+                    }}
+                  >
+                    Every day
+                  </button>
+                </div>
+              </div>
+
+              {/* Time Block Picker */}
+              <div>
+                <div
+                  style={{
+                    fontSize: 'var(--text-xs)',
+                    fontWeight: 'var(--weight-medium)' as unknown as number,
+                    color: 'var(--text-secondary)',
+                    marginBottom: 'var(--space-2)',
+                  }}
+                >
+                  Time Block
+                </div>
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(2, 1fr)',
+                    gap: 'var(--space-2)',
+                  }}
+                  role="radiogroup"
+                  aria-label="Select time block"
+                >
+                  {([
+                    { value: 'morning' as TimeBlock, label: 'Morning', icon: '\u2600\uFE0F' },
+                    { value: 'midday' as TimeBlock, label: 'Midday', icon: '\u{1F324}\uFE0F' },
+                    { value: 'workout' as TimeBlock, label: 'Workout', icon: '\u{1F4AA}' },
+                    { value: 'evening' as TimeBlock, label: 'Evening', icon: '\u{1F319}' },
+                  ]).map(({ value, label, icon }) => {
+                    const isSelected = editTimeBlock === value
+                    return (
+                      <button
+                        key={value}
+                        type="button"
+                        role="radio"
+                        aria-checked={isSelected}
+                        aria-label={label}
+                        onClick={() => handleSetTimeBlock(value)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 'var(--space-2)',
+                          padding: 'var(--space-2) var(--space-3)',
+                          borderRadius: 'var(--radius-md)',
+                          border: `1px solid ${isSelected ? 'var(--accent-muted)' : 'var(--glass-border)'}`,
+                          background: isSelected ? 'var(--accent-subtle)' : 'var(--glass-bg-secondary)',
+                          color: isSelected ? 'var(--accent)' : 'var(--text-secondary)',
+                          fontSize: 'var(--text-sm)',
+                          fontWeight: 'var(--weight-medium)' as unknown as number,
+                          fontFamily: 'var(--font-sans)',
+                          cursor: 'pointer',
+                          transition: `all var(--duration-fast) var(--ease-out)`,
+                          WebkitTapHighlightColor: 'transparent',
+                          outline: 'none',
+                          minHeight: 'var(--tap-min)',
+                        }}
+                      >
+                        <span aria-hidden="true">{icon}</span>
+                        {label}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Save button */}
+              <GlassButton
+                variant={scheduleSaved ? 'ghost' : 'primary'}
+                onClick={handleSaveSchedule}
+                disabled={!scheduleChanged || editDays.length === 0 || scheduleSaving}
+                fullWidth
+              >
+                {scheduleSaving ? 'Saving...' : scheduleSaved ? 'Saved!' : editingRule ? 'Save Schedule' : 'Create Schedule'}
+              </GlassButton>
+              {editDays.length === 0 && scheduleChanged && (
+                <div
+                  style={{
+                    fontSize: 'var(--text-xs)',
+                    color: 'var(--text-tertiary)',
+                    textAlign: 'center',
+                  }}
+                >
+                  Select at least one day
+                </div>
+              )}
             </div>
-          ) : (
+          </GlassCard>
+          {/* Show additional rules (read-only) if more than one exists */}
+          {scheduleRules.length > 1 && (
             <div
               style={{
                 display: 'flex',
                 flexDirection: 'column',
                 gap: 'var(--space-2)',
+                marginTop: 'var(--space-2)',
               }}
             >
-              {scheduleRules.map(rule => (
+              <div
+                style={{
+                  fontSize: 'var(--text-xs)',
+                  color: 'var(--text-tertiary)',
+                  padding: '0 var(--space-1)',
+                }}
+              >
+                Additional rules
+              </div>
+              {scheduleRules.slice(1).map(rule => (
                 <div
                   key={rule.id}
                   style={{
@@ -1384,14 +1905,112 @@ function TemplateDetailSheet({
           </div>
         </section>
 
+        {/* Save as New Template */}
+        <div style={{ paddingTop: 'var(--space-1)' }}>
+          <GlassButton
+            variant="secondary"
+            icon={<LayersIcon size={16} />}
+            onClick={handleSaveAsNewTemplate}
+            disabled={savingAsNew || savedAsNewConfirm}
+            fullWidth
+          >
+            {savedAsNewConfirm ? 'Saved as New!' : savingAsNew ? 'Saving...' : 'Save as New Template'}
+          </GlassButton>
+        </div>
+
         {/* Close Button */}
-        <div style={{ paddingTop: 'var(--space-2)' }}>
+        <div style={{ paddingTop: 'var(--space-1)' }}>
           <GlassButton variant="ghost" onClick={onClose} fullWidth>
             Close
           </GlassButton>
         </div>
       </div>
     </GlassSheet>
+  )
+}
+
+// ── Editable Config Pill (for inline sets/reps/weight editing) ──
+
+interface EditableConfigPillProps {
+  label: string
+  value: number
+  isEditing: boolean
+  editValue: string
+  onStartEdit: () => void
+  onChangeEdit: (val: string) => void
+  onSaveEdit: () => void
+  onCancelEdit: () => void
+}
+
+function EditableConfigPill({
+  label,
+  value,
+  isEditing,
+  editValue,
+  onStartEdit,
+  onChangeEdit,
+  onSaveEdit,
+  onCancelEdit,
+}: EditableConfigPillProps) {
+  const pillStyle: CSSProperties = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 'var(--space-1)',
+    padding: '2px 8px',
+    borderRadius: 'var(--radius-sm)',
+    background: 'var(--glass-bg-secondary)',
+    border: '1px solid var(--glass-border)',
+    fontSize: 'var(--text-xs)',
+    color: 'var(--text-secondary)',
+    cursor: 'pointer',
+    fontFamily: 'var(--font-sans)',
+    lineHeight: 1.4,
+    WebkitTapHighlightColor: 'transparent',
+  }
+
+  if (isEditing) {
+    return (
+      <span style={{ ...pillStyle, border: '1px solid var(--accent-muted)', padding: '2px 4px' }}>
+        <input
+          type="number"
+          value={editValue}
+          onChange={(e) => onChangeEdit(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') onSaveEdit()
+            if (e.key === 'Escape') onCancelEdit()
+          }}
+          autoFocus
+          inputMode="decimal"
+          style={{
+            width: '40px',
+            padding: '0 2px',
+            borderRadius: '2px',
+            background: 'transparent',
+            border: 'none',
+            color: 'var(--text-primary)',
+            fontSize: 'var(--text-xs)',
+            fontFamily: 'var(--font-sans)',
+            outline: 'none',
+            textAlign: 'center',
+          }}
+        />
+        <span style={{ color: 'var(--text-tertiary)' }}>{label}</span>
+      </span>
+    )
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onStartEdit}
+      aria-label={`Edit ${label}: ${value}`}
+      style={{ ...pillStyle, background: 'var(--glass-bg-secondary)' }}
+    >
+      <span style={{ fontWeight: 'var(--weight-semibold)' as unknown as number, color: 'var(--text-primary)' }}>
+        {value}
+      </span>
+      <span>{label}</span>
+    </button>
   )
 }
 

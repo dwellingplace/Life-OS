@@ -1,6 +1,6 @@
 'use client'
 
-import React, { type CSSProperties } from 'react'
+import React, { useState, useEffect, useRef, type CSSProperties } from 'react'
 import { GlassSheet } from '@/components/ui/GlassSheet'
 import { GlassButton } from '@/components/ui/GlassButton'
 import { GlassCard } from '@/components/ui/GlassCard'
@@ -23,6 +23,7 @@ interface TaskDetailSheetProps {
   subtasks?: Subtask[]
   project?: Project | null
   onToggle: (id: string) => Promise<void>
+  onUpdate?: (id: string, updates: Partial<Task>) => Promise<void>
   onSnooze: (id: string) => void
   onPromoteTop3: (id: string) => Promise<void>
   onDemoteTop3: (id: string) => Promise<void>
@@ -93,6 +94,8 @@ function formatDate(dateStr?: string): string {
 
 // ── Component ──
 
+const PRIORITIES: Priority[] = ['p1', 'p2', 'p3']
+
 export default function TaskDetailSheet({
   isOpen,
   onClose,
@@ -100,15 +103,45 @@ export default function TaskDetailSheet({
   subtasks = [],
   project = null,
   onToggle,
+  onUpdate,
   onSnooze,
   onPromoteTop3,
   onDemoteTop3,
   onDelete,
 }: TaskDetailSheetProps) {
+  const [editingTitle, setEditingTitle] = useState(false)
+  const [titleDraft, setTitleDraft] = useState('')
+  const titleInputRef = useRef<HTMLInputElement>(null)
+
+  // Sync draft when task changes
+  useEffect(() => {
+    if (task) setTitleDraft(task.title)
+    setEditingTitle(false)
+  }, [task?.id])
+
+  // Focus input when editing starts
+  useEffect(() => {
+    if (editingTitle) titleInputRef.current?.focus()
+  }, [editingTitle])
+
   if (!task) return null
 
   const isCompleted = task.status === 'completed'
   const taskSubtasks = subtasks.filter((s) => s.taskId === task.id)
+
+  const commitTitleEdit = async () => {
+    const trimmed = titleDraft.trim()
+    if (trimmed && trimmed !== task.title && onUpdate) {
+      await onUpdate(task.id, { title: trimmed })
+    }
+    setEditingTitle(false)
+  }
+
+  const handlePriorityChange = async (newPriority: Priority) => {
+    if (newPriority !== task.priority && onUpdate) {
+      await onUpdate(task.id, { priority: newPriority })
+    }
+  }
 
   // ── Styles ──
 
@@ -155,25 +188,81 @@ export default function TaskDetailSheet({
 
   return (
     <GlassSheet isOpen={isOpen} onClose={onClose} title={task.title}>
-      {/* ── Title ── */}
-      <h2
-        style={{
-          fontSize: 'var(--text-lg)',
-          fontWeight: 'var(--weight-semibold)' as unknown as number,
-          color: isCompleted ? 'var(--text-tertiary)' : 'var(--text-primary)',
-          textDecoration: isCompleted ? 'line-through' : 'none',
-          textDecorationColor: isCompleted ? 'var(--text-tertiary)' : 'transparent',
-          margin: '0 0 var(--space-4)',
-          fontFamily: 'var(--font-sans)',
-          lineHeight: 'var(--leading-tight)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 'var(--space-3)',
-        }}
-      >
-        {task.isTop3 && <StarIcon size={18} color="var(--accent)" />}
-        <span style={priorityStyle(task.priority)}>{priorityLabel(task.priority)}</span>
-      </h2>
+      {/* ── Title (click to edit) ── */}
+      <div style={{ margin: '0 0 var(--space-4)' }}>
+        {editingTitle ? (
+          <input
+            ref={titleInputRef}
+            value={titleDraft}
+            onChange={(e) => setTitleDraft(e.target.value)}
+            onBlur={commitTitleEdit}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') commitTitleEdit()
+              if (e.key === 'Escape') {
+                setTitleDraft(task.title)
+                setEditingTitle(false)
+              }
+            }}
+            style={{
+              fontSize: 'var(--text-lg)',
+              fontWeight: 'var(--weight-semibold)' as unknown as number,
+              color: 'var(--text-primary)',
+              fontFamily: 'var(--font-sans)',
+              lineHeight: 'var(--leading-tight)',
+              background: 'var(--glass-bg-secondary)',
+              border: '1px solid var(--accent-muted)',
+              borderRadius: 'var(--radius-sm)',
+              padding: 'var(--space-2)',
+              width: '100%',
+              outline: 'none',
+            }}
+          />
+        ) : (
+          <h2
+            onClick={() => {
+              if (onUpdate) {
+                setTitleDraft(task.title)
+                setEditingTitle(true)
+              }
+            }}
+            style={{
+              fontSize: 'var(--text-lg)',
+              fontWeight: 'var(--weight-semibold)' as unknown as number,
+              color: isCompleted ? 'var(--text-tertiary)' : 'var(--text-primary)',
+              textDecoration: isCompleted ? 'line-through' : 'none',
+              textDecorationColor: isCompleted ? 'var(--text-tertiary)' : 'transparent',
+              margin: 0,
+              fontFamily: 'var(--font-sans)',
+              lineHeight: 'var(--leading-tight)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 'var(--space-3)',
+              cursor: onUpdate ? 'text' : 'default',
+            }}
+          >
+            {task.isTop3 && <StarIcon size={18} color="var(--accent)" />}
+            {task.title}
+          </h2>
+        )}
+        {/* ── Priority Picker ── */}
+        <div style={{ display: 'flex', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
+          {PRIORITIES.map((p) => (
+            <button
+              key={p}
+              onClick={() => handlePriorityChange(p)}
+              style={{
+                ...priorityStyle(p),
+                cursor: onUpdate ? 'pointer' : 'default',
+                outline: task.priority === p ? '2px solid var(--accent)' : 'none',
+                outlineOffset: '1px',
+                WebkitTapHighlightColor: 'transparent',
+              }}
+            >
+              {priorityLabel(p)}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {/* ── Detail Rows ── */}
       <div>

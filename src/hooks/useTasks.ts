@@ -9,6 +9,7 @@ import {
   toggleTask as repoToggleTask,
   deleteTask as repoDeleteTask,
   snoozeTask as repoSnoozeTask,
+  updateTask as repoUpdateTask,
   promoteToTop3 as repoPromoteToTop3,
   demoteFromTop3 as repoDemoteFromTop3,
   getInboxTasks,
@@ -61,6 +62,7 @@ export interface TasksState {
   // Actions
   createTask: (input: CreateTaskInput) => Promise<void>
   toggleTask: (id: string) => Promise<void>
+  updateTask: (id: string, updates: Partial<Task>) => Promise<void>
   deleteTask: (id: string) => Promise<void>
   snoozeTask: (id: string, option: SnoozeOption, customDate?: string) => Promise<void>
   promoteToTop3: (id: string) => Promise<void>
@@ -154,6 +156,10 @@ export function useTasks(): TasksState {
     await repoToggleTask(id)
   }, [])
 
+  const updateTask = useCallback(async (id: string, updates: Partial<Task>): Promise<void> => {
+    await repoUpdateTask(id, updates)
+  }, [])
+
   const deleteTask = useCallback(async (id: string): Promise<void> => {
     await repoDeleteTask(id)
   }, [])
@@ -189,6 +195,7 @@ export function useTasks(): TasksState {
     subtasks,
     createTask,
     toggleTask,
+    updateTask,
     deleteTask,
     snoozeTask,
     promoteToTop3,
