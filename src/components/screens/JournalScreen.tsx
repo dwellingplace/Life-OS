@@ -384,13 +384,21 @@ export default function JournalScreen({ onSearchPress }: JournalScreenProps) {
     })
   }, [journal.entry?.sections])
 
-  // Live query for past journal entries (all entries except today's)
+  // Live query for past journal entries (all entries except today's, excluding empty ones)
   const pastEntries = useLiveQuery(
     () =>
       db.journalEntries
         .filter((e) => !e.deletedAt && e.entryDate !== dateStr)
         .toArray()
-        .then((entries) => entries.sort((a, b) => b.entryDate.localeCompare(a.entryDate))),
+        .then((entries) => {
+          const sectionKeys = JOURNAL_SECTIONS.map((s) => s.key)
+          return entries
+            .filter((e) => {
+              const sections = e.sections ?? {}
+              return sectionKeys.some((k) => (sections as Record<string, string>)[k]?.trim())
+            })
+            .sort((a, b) => b.entryDate.localeCompare(a.entryDate))
+        }),
     [dateStr],
     [] as JournalEntry[]
   )

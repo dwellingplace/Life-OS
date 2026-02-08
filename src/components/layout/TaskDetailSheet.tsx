@@ -112,6 +112,8 @@ export default function TaskDetailSheet({
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState('')
   const titleInputRef = useRef<HTMLInputElement>(null)
+  const scheduledDateRef = useRef<HTMLInputElement>(null)
+  const dueDateRef = useRef<HTMLInputElement>(null)
 
   // Sync draft when task changes
   useEffect(() => {
@@ -267,15 +269,63 @@ export default function TaskDetailSheet({
       {/* ── Detail Rows ── */}
       <div>
         {/* Scheduled Date (Do Date) */}
-        <div style={rowStyle}>
+        <div
+          style={{ ...rowStyle, cursor: onUpdate ? 'pointer' : 'default' }}
+          onClick={() => onUpdate && scheduledDateRef.current?.showPicker?.()}
+        >
           <span style={labelStyle}>Do date</span>
-          <span style={valueStyle}>{formatDate(task.scheduledDate)}</span>
+          <span style={valueStyle}>
+            {formatDate(task.scheduledDate)}
+            {onUpdate && (
+              <input
+                ref={scheduledDateRef}
+                type="date"
+                value={task.scheduledDate ?? ''}
+                onChange={(e) => {
+                  const val = e.target.value || undefined
+                  onUpdate(task.id, { scheduledDate: val })
+                }}
+                style={{
+                  position: 'absolute',
+                  opacity: 0,
+                  width: 0,
+                  height: 0,
+                  overflow: 'hidden',
+                  pointerEvents: 'none',
+                }}
+              />
+            )}
+          </span>
         </div>
 
         {/* Due Date (Deadline) */}
-        <div style={rowStyle}>
+        <div
+          style={{ ...rowStyle, cursor: onUpdate ? 'pointer' : 'default' }}
+          onClick={() => onUpdate && dueDateRef.current?.showPicker?.()}
+        >
           <span style={labelStyle}>Deadline</span>
-          <span style={valueStyle}>{formatDate(task.dueDate)}</span>
+          <span style={valueStyle}>
+            {formatDate(task.dueDate)}
+            {onUpdate && (
+              <input
+                ref={dueDateRef}
+                type="date"
+                value={task.dueDate ?? ''}
+                onChange={(e) => {
+                  const val = e.target.value || undefined
+                  onUpdate(task.id, { dueDate: val })
+                }}
+                style={{
+                  position: 'absolute',
+                  opacity: 0,
+                  width: 0,
+                  height: 0,
+                  overflow: 'hidden',
+                  pointerEvents: 'none',
+                }}
+              />
+            )}
+          </span>
         </div>
 
         {/* Due Time */}

@@ -77,7 +77,8 @@ export function useToday(viewDate?: string): TodayData {
       if (t.status === 'completed') return false
       if (t.scheduledDate === dateStr) return true
       if (t.dueDate === dateStr) return true
-      if (t.dueDate && t.dueDate < dateStr) return true // overdue
+      if (t.dueDate && t.dueDate < dateStr) return true // overdue by deadline
+      if (t.scheduledDate && t.scheduledDate < dateStr && !t.dueDate) return true // overdue by scheduled date
       return false
     })
   }, [allTasks, dateStr])

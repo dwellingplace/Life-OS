@@ -168,7 +168,8 @@ export async function getTodayTasks(dateStr: string): Promise<Task[]> {
         !t.deletedAt &&
         (t.scheduledDate === dateStr ||
           t.dueDate === dateStr ||
-          (!!t.dueDate && t.dueDate < dateStr && t.status !== 'completed')),
+          (!!t.dueDate && t.dueDate < dateStr && t.status !== 'completed') ||
+          (!!t.scheduledDate && t.scheduledDate < dateStr && !t.dueDate && t.status !== 'completed')),
     )
     .toArray()
 
